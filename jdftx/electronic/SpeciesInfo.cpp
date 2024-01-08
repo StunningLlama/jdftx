@@ -37,6 +37,7 @@ void SpeciesInfo::sync_atpos()
 	atposManaged = ManagedArray<vector3<>>(atpos); //it will get transferred to GPU if/when necessary
 	//Invalidate cached projectors:
 	cachedV.clear();
+	cachedVmixed.clear();
 }
 
 inline bool isParallel(vector3<> x, vector3<> y)
@@ -139,32 +140,38 @@ const std::vector<string>& getPseudopotentialPrefixes(); //implemented in ion_sp
 
 void SpeciesInfo::setup(const Everything &everything)
 {	e = &everything;
-	if(!atpos.size()) return; //unused species
-	
-	//Read pseudopotential
-	ifstream ifs;
-	const std::vector<string>& prefixes = getPseudopotentialPrefixes();
-	string potfilenameFull; //full filename with prefix (if any)
-	for(const string& prefix: prefixes)
-	{	potfilenameFull = prefix + potfilename;
-		ifs.open(potfilenameFull.c_str());
-		if(ifs.is_open()) break;
+	logPrintf("HI!!");
+	//if(!atpos.size()) return; //unused species
+	//TODO
+
+
+	if (!isMixed) {
+		//Read pseudopotential
+		ifstream ifs;
+		const std::vector<string>& prefixes = getPseudopotentialPrefixes();
+		string potfilenameFull; //full filename with prefix (if any)
+		for(const string& prefix: prefixes)
+		{	potfilenameFull = prefix + potfilename;
+			ifs.open(potfilenameFull.c_str());
+			if(ifs.is_open()) break;
+		}
+		if(!ifs.is_open()) die("Can't open pseudopotential file '%s' for reading.\n", potfilename.c_str());
+		logPrintf("\nReading pseudopotential file '%s':\n",potfilenameFull.c_str());
+		switch(pspFormat)
+		{	case Fhi: readFhi(ifs); break;
+			case Uspp: readUspp(ifs); break;
+			case UPF: readUPF(ifs); break;
+		}
+
+
+		//Add citation for recognized sources:
+		if(potfilenameFull.find("GBRV") != string::npos)
+			Citations::add("Pseudopotentials",
+				"KF Garrity, JW Bennett, KM Rabe and D Vanderbilt, Comput. Mater. Sci. 81, 446 (2014)");
+		if(potfilenameFull.find("SG15") != string::npos)
+			Citations::add("Pseudopotentials",
+				"M Schlipf and F Gygi, Comput. Phys. Commun. 196, 36 (2015)");
 	}
-	if(!ifs.is_open()) die("Can't open pseudopotential file '%s' for reading.\n", potfilename.c_str());
-	logPrintf("\nReading pseudopotential file '%s':\n",potfilenameFull.c_str());
-	switch(pspFormat)
-	{	case Fhi: readFhi(ifs); break;
-		case Uspp: readUspp(ifs); break;
-		case UPF: readUPF(ifs); break;
-	}
-	
-	//Add citation for recognized sources:
-	if(potfilenameFull.find("GBRV") != string::npos)
-		Citations::add("Pseudopotentials",
-			"KF Garrity, JW Bennett, KM Rabe and D Vanderbilt, Comput. Mater. Sci. 81, 446 (2014)");
-	if(potfilenameFull.find("SG15") != string::npos)
-		Citations::add("Pseudopotentials",
-			"M Schlipf and F Gygi, Comput. Phys. Commun. 196, 36 (2015)");
 	
 	//Estimate eigenvalues (if not read from file):
 	estimateAtomEigs();
@@ -189,8 +196,13 @@ void SpeciesInfo::setup(const Everything &everything)
 			die("\nUltrasoft pseudopotentials do not currently support meta-GGA or hybrid functionals.\n");
 	}
 	
+	if (isMixed) {
+		atomicNumber = 0;
+		Z = 0.0;
+	}
+
 	//Generate atomic number from symbol, if not stored in pseudopotential:
-	if(!atomicNumber)
+	if(!atomicNumber && !isMixed)
 	{	AtomicSymbol atSym = AtomicSymbol::H;
 		if(!atomicSymbolMap.getEnum(name.c_str(), atSym))
 			die("\nCould not determine atomic number for species '%s'.\n"
@@ -201,7 +213,7 @@ void SpeciesInfo::setup(const Everything &everything)
 	ZfullCore = atomicNumber - Z - (nCoreRadial ? nCoreRadial(0.) : 0.);
 	
 	//Get the atomic mass if not set:
-	if(!mass) mass = atomicMass(AtomicSymbol(atomicNumber));
+	if(!mass && !isMixed) mass = atomicMass(AtomicSymbol(atomicNumber));
 	
 	//Initialize the MnlAll matrix, and if necessary, QintAll:
 	{	//Count projectors:
@@ -399,6 +411,7 @@ void SpeciesInfo::updateLatticeDependent()
 		tauCoreRadial.updateGmax(0, nGridLoc);
 		for(auto& Qijl: Qradial) Qijl.second.updateGmax(Qijl.first.l, nGridLoc);
 		cachedV.clear(); //clear any cached projectors
+		cachedVmixed.clear();
 	}
 	
 	//Update Qradial indices, matrix and nagIndex if not previously init'd, or if R has changed:

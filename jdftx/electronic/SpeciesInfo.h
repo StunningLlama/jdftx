@@ -26,6 +26,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/ScalarFieldArray.h>
 #include <core/vector3.h>
 #include <core/string.h>
+#include <electronic/MixGradient.h>
 
 class ColumnBundle;
 class QuantumNumber;
@@ -45,11 +46,14 @@ public:
 	string potfilename; //!< pseudopotential filename
 	string pulayfilename; //!< pulay correction filename
 	bool fromWildcard; //!< whether this pseudopotential was automatically added using a wildcard (for command printing purposes only)
+	bool isMixed; //!< Is this a mixed atom
+	std::vector<std::shared_ptr<SpeciesInfo>> mixSpecies;
 	
 	std::vector<vector3<> > atpos; //!< array of atomic positions of this species
 	std::vector<vector3<> > velocities; //!< array of atomic velocities (NAN unless running MD) in lattice coordinates
 	ManagedArray<vector3<>> atposManaged; //!< managed copy of atpos accessed from operator code (for auto cpu/gpu transfers)
 	void sync_atpos(); //!< update changes in atpos; call whenever atpos is changed (this will update atposManaged and invalidate cached projectors, if any)
+	std::vector<std::vector<double>> mixRatio;
 	
 	double dE_dnG; //!< Derivative of [total energy per atom] w.r.t [nPlanewaves per unit volume] (for Pulay corrections)
 	double mass; //!< ionic mass (currently unused)	
@@ -93,11 +97,16 @@ public:
 	//! If derivDir is non-null, return the derivative with respct to Cartesian k direction *derivDir instead (never cached).
 	//! If stressDir is >=0, then calculate (i,j) component of dVnl/dR . RT where stressDir = 3*i+j
 	std::shared_ptr<ColumnBundle> getV(const ColumnBundle& Cq, const vector3<>* derivDir=0, const int stressDir=-1) const;
+	std::shared_ptr<ColumnBundle> getVmixed(const ColumnBundle& Cq, int species, int atom) const;
 	int nProjectors() const { return MnlAll.nRows() * atpos.size(); } //!< total number of projectors for all atoms in this species (number of columns in result of getV)
 	
 	//! Return non-local energy for this species and quantum number q and optionally accumulate
 	//! projected electronic gradient in HVdagCq (if non-null)
 	double EnlAndGrad(const QuantumNumber& qnum, const diagMatrix& Fq, const matrix& VdagCq, matrix& HVdagCq) const;
+
+	double EnlAndGradMixed(const QuantumNumber& qnum, const diagMatrix& Fq, const ColumnBundle& Cq, ColumnBundle& HCq, const class IonInfo& iInfo) const;
+	
+	double accumMixGradient (int species, std::vector<diagMatrix>& Fq, std::vector<ColumnBundle>& Cq, MixGradient& grad );
 	
 	//! Accumulate pseudopotential contribution to the overlap in OCq
 	void augmentOverlap(const ColumnBundle& Cq, ColumnBundle& OCq, matrix* VdagCq=0) const;
@@ -145,6 +154,9 @@ public:
 	//! Add contributions from this species to Vlocps, rhoIon, nChargeball and nCore/tauCore (if any)
 	void updateLocal(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
 		ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const; 
+
+	void updateLocalMixed(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
+		ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const;
 	
 	//! Return the local forces (due to Vlocps, rhoIon, nChargeball and nCore/tauCore)
 	std::vector< vector3<> > getLocalForces(const ScalarFieldTilde& ccgrad_Vlocps, const ScalarFieldTilde& ccgrad_rhoIon,
@@ -161,6 +173,7 @@ public:
 	//! Spin-angle helper functions:
 	static matrix getYlmToSpinAngleMatrix(int l, int j2); //!< Get the ((2l+1)*2)x(j2+1) matrix that transforms the Ylm+spin to the spin-angle functions, where j2=2*j with j = l+/-0.5
 	static matrix getYlmOverlapMatrix(int l, int j2); //!< Get the ((2l+1)*2)x((2l+1)*2) overlap matrix of the spin-spherical harmonics for total angular momentum j (note j2=2*j)
+	matrix MnlAll; //!< block matrix containing Mnl for all l,m
 private:
 	matrix3<> Rprev; void updateLatticeDependent(); //!< If Rprev differs from gInfo.R, update the lattice dependent quantities (such as the radial functions)
 
@@ -170,12 +183,12 @@ private:
 
 	std::vector< std::vector<RadialFunctionG> > VnlRadial; //!< non-local projectors (outer index l, inner index projetcor)
 	std::vector<matrix> Mnl; //!< nonlocal pseudopotential projector matrix (indexed by l)
-	matrix MnlAll; //!< block matrix containing Mnl for all l,m 
 	
 	std::vector<matrix> Qint; //!< overlap augmentation matrix (indexed by l, empty if no augmentation)
 	matrix QintAll; //!< block matrix containing Qint for all l,m 
 	
 	std::map<std::pair<vector3<>,const Basis*>, std::shared_ptr<ColumnBundle> > cachedV; //cached projectors (identified by k-point and basis pointer)
+	std::map<std::tuple<vector3<>,const Basis*, int, int>, std::shared_ptr<ColumnBundle> > cachedVmixed;
 	
 	struct QijIndex
 	{	int l1, p1; //!< Angular momentum and projector index for channel i

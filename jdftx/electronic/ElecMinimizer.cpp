@@ -385,8 +385,10 @@ void elecMinimize(Everything& e)
 	{	ElecMinimizer emin(e);
 		emin.minimize(e.elecMinParams);
 		e.eVars.setEigenvectors();
+		e.iInfo.accumMixGradient(e.eVars.F, e.eVars.C, e.iInfo.mixGradient);
 	}
 	e.eVars.isRandom = false; //wavefunctions are no longer random
+	
 	//Converge empty states if necessary:
 	if(e.cntrl.convergeEmptyStates and (not e.cntrl.fixed_H))
 		convergeEmptyStates(e);

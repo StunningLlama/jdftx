@@ -228,7 +228,19 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 	}
 }
 int SpeciesInfo::nAtomicOrbitals() const
-{	int nOrbitals = 0;
+{	
+	if (isMixed) {
+		int max = 0;
+		
+		for (int m = 0; m < mixSpecies.size(); m++) {
+			auto sp = mixSpecies[m];
+			max = std::max(sp->nAtomicOrbitals(), max);
+		}
+		
+		return max;
+	}
+	
+	int nOrbitals = 0;
 	if(isRelativistic())
 	{	for(int l=0; l<int(psiRadial.size()); l++)
 			for(unsigned n=0; n<psiRadial[l].size(); n++)

@@ -677,6 +677,8 @@ double ElecVars::applyHamiltonian(int q, const diagMatrix& Fq, ColumnBundle& HCq
 	
 	//Nonlocal pseudopotentials:
 	ener.E["Enl"] += qnum.weight * e->iInfo.EnlAndGrad(qnum, Fq, VdagC[q], HVdagCq);
+	ener.E["Enl"] += qnum.weight * e->iInfo.EnlAndGradMixed(qnum, Fq, C[q], HCq);
+
 	if(HCq) e->iInfo.projectGrad(HVdagCq, C[q], HCq);
 	
 	//Compute subspace hamiltonian if needed:

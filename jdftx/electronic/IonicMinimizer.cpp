@@ -193,7 +193,7 @@ void IonicMinimizer::step(const IonicGradient& dir, double alpha)
 	
 	IonicGradient dpos = alpha * e.gInfo.invR * dir; //dir is in cartesian, atpos in lattice
 	
-	if((e.cntrl.dragWavefunctions or populationAnalysisPending) and (not iInfo.ljOverride))
+	if((e.cntrl.dragWavefunctions or populationAnalysisPending) and (not iInfo.ljOverride) and !iInfo.hasMixedAtoms)
 	{	//Check if atomic orbitals available and compile list of displacements for each orbital:
 		std::vector< vector3<> > drColumns;
 		std::vector<int> spOffset(iInfo.species.size()+1, 0); //species offsets into atomic orbitals

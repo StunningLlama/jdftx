@@ -24,6 +24,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <electronic/SpeciesInfo.h>
 #include <electronic/IonicMinimizer.h>
 #include <electronic/IonicGaussianPotential.h>
+#include <electronic/MixGradient.h>
 #include <core/matrix.h>
 #include <core/ScalarField.h>
 #include <core/Thread.h>
@@ -78,6 +79,9 @@ public:
 	ScalarField nCore; //!< Core electron density for partial (nonlinear) core correction
 	ScalarField tauCore; //!< Model for the KE density of the core (TF+vW applied to nCore) (used by meta-GGAs)
 	
+	bool hasMixedAtoms;
+	MixGradient mixGradient;
+	
 	IonInfo();
 	
 	void setup(const Everything&);
@@ -96,6 +100,9 @@ public:
 	//! Optionally accumulate the corresponding electronic gradient in HCq and ionic gradient in forces
 	double EnlAndGrad(const QuantumNumber& qnum, const diagMatrix& Fq, const std::vector<matrix>& VdagCq, std::vector<matrix>& HVdagCq) const;
 	
+	double EnlAndGradMixed(const QuantumNumber& qnum, const diagMatrix& Fq, const ColumnBundle& Cq, ColumnBundle& HCq) const;
+	double accumMixGradient(std::vector<diagMatrix> &F, std::vector<ColumnBundle> &C, class MixGradient& grad);
+
 	//! Accumulate pseudopotential dependent contribution to the overlap in OCq
 	void augmentOverlap(const ColumnBundle& Cq, ColumnBundle& OCq, std::vector<matrix>* VdagCq=0) const;
 	

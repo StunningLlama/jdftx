@@ -25,7 +25,7 @@ struct CommandIon : public Command
 {
 	CommandIon() : Command("ion", "jdftx/Ionic/Geometry")
 	{
-		format = "<species-id> <x0> <x1> <x2> [v <vx0> <vx1> <vx2>] <moveScale> [<constraint type>="
+		format = "<species-id> [<mix frac 1> ...] <x0> <x1> <x2> [v <vx0> <vx1> <vx2>] <moveScale> [<constraint type>="
 			+ constraintTypeMap.optionList() + " <d0> <d1> <d2> [<group> [HyperPlane <d0> ...]]]";
 		comments =
 			"Add an atom of species <species-id> at coordinates (<x0>,<x1>,<x2>).\n"
@@ -64,6 +64,19 @@ struct CommandIon : public Command
 		string id; pl.get(id, string(), "species-id", true);
 		auto sp = findSpecies(id, e);
 		if(!sp) throw string("Species "+id+" has not been defined");
+
+		if (sp->isMixed) {
+			std::vector<double> ratios;
+			for (int mixsp = 0; mixsp < sp->mixSpecies.size(); mixsp++) {
+				double frac = 0.0;
+				ostringstream oss; oss << "mix frac " << mixsp;
+				pl.get(frac, 0., oss.str(), true);
+				ratios.push_back(frac);
+			}
+
+			sp->mixRatio.push_back(ratios);
+		}
+
 		//Read coordinates:
 		vector3<> pos;
 		for(int k=0; k<3; k++)
@@ -169,6 +182,7 @@ struct CommandIon : public Command
 	}
 }
 commandIon;
+
 
 //-------------------------------------------------------------------------------------------------
 

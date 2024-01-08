@@ -29,6 +29,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/Units.h>
 #include <cstdio>
 #include <cmath>
+#include "MixGradient.h"
 
 #define MIN_ION_DISTANCE 1e-10
 
@@ -67,11 +68,14 @@ void IonInfo::setup(const Everything &everything)
 	}
 	logPrintf("Width of ionic core gaussian charges (only for fluid interactions / plotting) set to %lg\n", ionWidth);
 	
+	hasMixedAtoms = false;
 	// Call the species setup routines
 	int nAtomsTot=0;
 	for(auto sp: species)
 	{	nAtomsTot += sp->atpos.size();
 		sp->setup(*e);
+		if (sp->isMixed)
+			hasMixedAtoms = true;
 	}
 	logPrintf("\nInitialized %d species with %d total atoms.\n", int(species.size()), nAtomsTot);
 	if(!nAtomsTot) logPrintf("Warning: no atoms in the calculation.\n");
@@ -174,6 +178,10 @@ void IonInfo::update(Energies& ener)
 	ScalarFieldTilde nCoreTilde, tauCoreTilde;
 	for(auto sp: species) //collect contributions to the above from all species
 		sp->updateLocal(Vlocps, rhoIon, nChargeball, nCoreTilde, tauCoreTilde);
+
+	for(auto sp: species) //collect contributions to the above from all species
+		sp->updateLocalMixed(Vlocps, rhoIon, nChargeball, nCoreTilde, tauCoreTilde);
+
 	//Add long-range part to Vlocps and smoothen rhoIon:
 	Vlocps += (*e->coulomb)(rhoIon, Coulomb::PointChargeRight);
 	if(computeStress and ionWidth)
@@ -327,9 +335,33 @@ double IonInfo::EnlAndGrad(const QuantumNumber& qnum, const diagMatrix& Fq, cons
 {	double Enlq = 0.0;
 	for(unsigned sp=0; sp<species.size(); sp++)
 		Enlq += species[sp]->EnlAndGrad(qnum, Fq, VdagCq[sp], HVdagCq[sp]);
+
 	return Enlq;
 }
 
+double IonInfo::EnlAndGradMixed(const QuantumNumber& qnum, const diagMatrix& Fq, const ColumnBundle& Cq, ColumnBundle& HCq) const
+{double Enlq = 0.0;
+	for(unsigned sp=0; sp<species.size(); sp++) {
+		auto specie = species[sp];
+		if (specie->isMixed)
+			Enlq += specie->EnlAndGradMixed(qnum, Fq, Cq, HCq, *this);
+	}
+	return Enlq;
+}
+
+
+
+double IonInfo::accumMixGradient(std::vector<diagMatrix> &F, std::vector<ColumnBundle> &C, MixGradient& grad) {
+	grad.clear();
+	for(unsigned sp=0; sp<e->iInfo.species.size(); sp++) {
+		grad.push_back(std::vector<std::vector<double>>());
+		if (e->iInfo.species[sp]->isMixed) {
+			auto species = e->iInfo.species[sp];
+			species->accumMixGradient(sp, F, C, grad);
+		}
+	}
+	return 0;
+}
 
 
 void IonInfo::augmentOverlap(const ColumnBundle& Cq, ColumnBundle& OCq, std::vector<matrix>* VdagCq) const
@@ -599,9 +631,22 @@ void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matri
 	int Zscale = ljOverride ? 0 : 1;
 	for(size_t spIndex=0; spIndex<species.size(); spIndex++)
 	{	const SpeciesInfo& sp = *species[spIndex];
-		for(const vector3<>& pos: sp.atpos)
-			atoms.push_back(Atom(Zscale*sp.Z, pos, vector3<>(0.,0.,0.), sp.atomicNumber, spIndex));
+		if (!sp.isMixed) {
+			for(const vector3<>& pos: sp.atpos) {
+				atoms.push_back(Atom(Zscale*sp.Z, pos, vector3<>(0.,0.,0.), sp.atomicNumber, spIndex));
+			}
+		} else {
+			for (int n = 0; n < sp.atpos.size(); n ++) {
+				double Z = 0;
+				for (int m = 0; m < sp.mixSpecies.size(); m++) {
+					auto spm = sp.mixSpecies[m];
+					Z += spm->Z*sp.mixRatio[n][m];
+				}
+				atoms.push_back(Atom(Zscale*Z, sp.atpos[n], vector3<>(0.,0.,0.), 0, spIndex));
+			}
+		}
 	}
+	
 	//Compute Ewald sum and gradients (this also moves each Atom::pos into fundamental zone)
 	double Eewald = e->coulomb->energyAndGrad(atoms, E_RRT);
 	//Compute optional pair-potential terms:

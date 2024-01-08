@@ -65,6 +65,7 @@ struct CommandIonSpecies : public Command
 	{	std::shared_ptr<SpeciesInfo> specie(new SpeciesInfo);
 		specie->potfilename = filename;
 		specie->fromWildcard = fromWildcard;
+		specie->isMixed = false;
 		
 		//Split filename into segments:
 		
@@ -120,6 +121,63 @@ struct CommandIonSpecies : public Command
 	}
 }
 commandIonSpecies;
+
+
+
+struct CommandAddMix : public Command
+{
+	CommandAddMix() : Command("add-mix", "jdftx/Ionic/Species")
+	{
+
+		format = "<name> [species 1] [species 2] ...";
+		comments =
+			"TODO";
+
+		allowMultiple = true;
+
+		require("ion-species");
+	}
+
+	void process(ParamList& pl, Everything& e)
+	{
+		std::shared_ptr<SpeciesInfo> specie(new SpeciesInfo);
+		specie->potfilename = "";
+		specie->fromWildcard = false;
+		specie->isMixed = true;
+
+		pl.get(specie->name, string(), "name", true);
+		//specie->name[0] = toupper(specie->name[0]);
+
+		for(auto sp: e.iInfo.species)
+			if(specie->name==sp->name)
+				throw string("Ion species "+specie->name+" has been defined more than once");
+
+		e.iInfo.species.push_back(specie);
+
+		while (true) {
+			string mixname;
+			pl.get(mixname, string(), "species id", false);
+
+			if (mixname.empty())
+				break;
+
+			auto sp = findSpecies(mixname, e);
+			if (!sp)
+				throw string("Mix species not found");
+			if (sp->isMixed) {
+				throw string("Mixed species cannot contain mixed species.");
+			}
+
+			specie->mixSpecies.push_back(sp);
+		}
+	}
+
+	void printStatus(Everything& e, int iRep)
+	{
+
+	}
+}
+commandAddMix;
 
 const std::vector<string>& getPseudopotentialPrefixes()
 {	static std::vector<string> prefixes;

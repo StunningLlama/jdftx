@@ -365,7 +365,8 @@ void parse(std::vector< pair<string,string> > input, Everything& everything, boo
 					safeProcess(c, "", everything, encountered, errors);
 			}
 		//Remove unused pseudopotentials as soon as ion command has been processed:
-		if(encounteredIon)
+		//TODO
+		if(encounteredIon && false)
 		{	species = everything.iInfo.species; //backup of species that retains unused ones
 			for(auto iter=everything.iInfo.species.begin(); iter!=everything.iInfo.species.end();)
 				if(not (*iter)->atpos.size())

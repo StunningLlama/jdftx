@@ -45,6 +45,9 @@ public:
 	
 	std::vector< std::vector<matrix> > VdagC; //!< cached pseudopotential projections (by state and then species)
 	
+	//Mix
+	std::vector<std::vector<std::vector<std::shared_ptr<ColumnBundle>>>> Vmixed;
+	
 	//Densities and potentials:
 	ScalarFieldArray n; //!< electron density (single ScalarField) or spin density (two ScalarFields [up,dn]) or spin density matrix (four ScalarFields [UpUp, DnDn, Re(UpDn), Im(UpDn)])
 	ScalarFieldArray nAccum; //!< ElecVars::n accumulated over an MD trajectory

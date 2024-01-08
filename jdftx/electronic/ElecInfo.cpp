@@ -80,8 +80,18 @@ void ElecInfo::setup(const Everything &everything, std::vector<diagMatrix>& F, E
 	std::vector<double> nsElectrons = qNet; //manually specified excess charge(s)
 	nElectrons = 0;
 	for(unsigned s=0; s<nsElectrons.size(); s++) //each spin channel
-	{	for(auto sp: e->iInfo.species)
-			nsElectrons[s] += sp->Z * sp->atpos.size() * (1./nsElectrons.size());
+	{	for(auto sp: e->iInfo.species) {
+			if (!sp->isMixed)
+				nsElectrons[s] += sp->Z * sp->atpos.size() * (1./nsElectrons.size());
+			else {
+				for (int natom = 0; natom < sp->atpos.size(); natom++) {
+					for (auto mixid = 0; mixid < sp->mixSpecies.size(); mixid++) {
+						nsElectrons[s] += sp->mixRatio[natom][mixid]*sp->mixSpecies[mixid]->Z * (1./nsElectrons.size());
+					}
+				}
+			}
+		}
+
 		if(nsElectrons[s]<0)
 			die("Number of electrons in spin channel %d is negative (= %lg)\n", s, nsElectrons[s]);
 		nElectrons += nsElectrons[s];

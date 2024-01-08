@@ -150,7 +150,7 @@ struct LCAOminimizer : Minimizable<ElecGradient> //Uses only the Haux entries of
 int ElecVars::LCAO()
 {	const ElecInfo& eInfo = e->eInfo;
 	const IonInfo& iInfo = e->iInfo;
-	
+	return 0;
 	//Count total atomic orbitals:
 	int nAtomic = iInfo.nAtomicOrbitals();
 	if(nAtomic)
@@ -202,7 +202,7 @@ int ElecVars::LCAO()
 	if(!e->cntrl.fixed_H)
 	{	ScalarFieldTildeArray nTilde(n.size());
 		for(auto sp: e->iInfo.species)
-			if(sp->atpos.size())  // Check for unused species
+			if(sp->atpos.size() && !sp->isMixed)  // Check for unused species
 				sp->accumulateAtomicDensity(nTilde);
 		nullToZero(nTilde, e->gInfo);
 		e->symm.symmetrize(nTilde);

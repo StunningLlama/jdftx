@@ -727,6 +727,14 @@ void Dump::operator()(DumpFrequency freq, int iter)
 		F = Forig; //restore fillings
 	}
 	
+	if (ShouldDump(MixGrad))
+	{
+		StartDump("mixgrad")
+		FILE* fp = fopen(fname.c_str(), "w");
+		e->iInfo.mixGradient.print((Everything&)*e, fp);
+		EndDump
+	}
+	
 	if(freq==DumpFreq_End and (ShouldDump(R) or ShouldDump(L) or ShouldDump(Q) or ShouldDump(Berry)))
 	{	if(!dumpCprime) dumpCprime = std::make_shared<DumpCprime>(); //default parameters
 		dumpCprime->dump((Everything&)*e);

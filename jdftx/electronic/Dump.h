@@ -52,7 +52,7 @@ enum DumpVariable { DumpNone, DumpState, //None or exactly those required to res
  	DumpBoundCharge, DumpSolvationRadii, DumpQMC, DumpOcean, DumpBGW, DumpRealSpaceWfns, DumpFluidDebug, DumpSlabEpsilon, DumpBulkEpsilon, DumpChargedDefect,
 	DumpDOS, DumpPolarizability, DumpElectronScattering, DumpSIC, DumpDipole, DumpStress, DumpExcitations, DumpFCI, DumpSpin,
 	DumpMomenta, DumpVelocities, DumpFermiVelocity, DumpR, DumpL, DumpQ, DumpBerry,
-	DumpSymmetries, DumpKpoints, DumpGvectors, DumpOrbitalDep, DumpXCanalysis, DumpEresolvedDensity, DumpFermiDensity,
+	DumpSymmetries, DumpKpoints, DumpGvectors, DumpOrbitalDep, DumpXCanalysis, DumpEresolvedDensity, DumpFermiDensity, DumpMixGrad,
 	DumpDelim, //special value used as a delimiter during command processing
 };
 

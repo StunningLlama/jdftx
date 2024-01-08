@@ -22,6 +22,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <electronic/Everything.h>
 #include <electronic/ColumnBundle.h>
 #include <core/matrix.h>
+#include <electronic/MixGradient.h>
 
 //------- primary SpeciesInfo functions involved in simple energy and gradient calculations (with norm-conserving pseudopotentials) -------
 
@@ -29,6 +30,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 //Return non-local energy and optionally accumulate its electronic and/or ionic gradients for a given quantum number
 double SpeciesInfo::EnlAndGrad(const QuantumNumber& qnum, const diagMatrix& Fq, const matrix& VdagCq, matrix& HVdagCq) const
 {	static StopWatch watch("EnlAndGrad"); watch.start();
+	if (isMixed) return 0.;
 	if(!atpos.size()) return 0.; //unused species
 	if(!MnlAll) return 0.; //purely local psp
 	int nProj = MnlAll.nRows();
@@ -44,6 +46,95 @@ double SpeciesInfo::EnlAndGrad(const QuantumNumber& qnum, const diagMatrix& Fq, 
 	HVdagCq += MVdagC;
 	watch.stop();
 	return Enlq;
+}
+
+double SpeciesInfo::EnlAndGradMixed(const QuantumNumber& qnum, const diagMatrix& Fq, const ColumnBundle& Cq, ColumnBundle& HCq, const IonInfo& iInfo) const
+{
+	static StopWatch watch("EnlAndGrad"); watch.start();
+	if (!isMixed) return 0.;
+	if(!atpos.size()) return 0.; //unused species
+	//int nProj = MnlAll.nRows() / e->eInfo.spinorLength();
+	//if(!MnlAll || !nProj) return 0; //purely local psp
+
+	double Enlq = 0.0;
+
+	for (int species = 0; species < mixSpecies.size(); species++) {
+		for (int n = 0; n < atpos.size(); n ++) {
+			auto sp = mixSpecies[species];
+
+			auto V = getVmixed(Cq, species, n);
+			
+			double mixfactor = mixRatio[n][species];
+			matrix VdagCq = (*V)^Cq;
+
+			matrix MatomVdagC = sp->MnlAll * VdagCq;
+			Enlq += mixfactor*trace(Fq * dagger(VdagCq) * MatomVdagC).real();
+			if (HCq)
+				HCq += mixfactor * ((*V) * MatomVdagC);
+		}
+	}
+	watch.stop();
+	return Enlq;
+}
+
+double SpeciesInfo::accumMixGradient(int species, std::vector<diagMatrix>& F, std::vector<ColumnBundle>& C, MixGradient& grad) {
+	
+	double mu = 0., Bz = 0., mu2=0.;
+	if(std::isnan(e->eInfo.mu)) {
+		mu = e->eInfo.findMu(e->eVars.Hsub_eigs, e->eInfo.nElectrons, Bz);
+		//mu2 = e->eInfo.findMu(e->eVars.Haux_eigs, e->eInfo.nElectrons, Bz);
+	} else {
+		mu = e->eInfo.mu;
+	}
+	
+	//logPrintf("mu = %g", mu);
+	//logPrintf("mu2 = %g", mu2);
+	
+	const GridInfo& gInfo = e->gInfo;
+	
+	ScalarFieldTilde Vlocps;
+	ScalarFieldTilde rhoIon;
+	//logPrintf("GRADIENT ");
+	for (int n = 0; n < atpos.size(); n ++) {
+		grad[species].push_back(std::vector<double>());
+		for (int m = 0; m < mixSpecies.size(); m++) {
+			double gradcomponent = 0.0;
+			auto sp = mixSpecies[m];
+				
+			for(int q=e->eInfo.qStart; q<e->eInfo.qStop; q++)
+			{
+				ColumnBundle& Cq = C[q];
+				diagMatrix Fq = F[q];
+				auto V = getVmixed(Cq, m, n);
+
+				matrix VdagCq = (*V)^Cq;
+				
+				matrix MatomVdagC = sp->MnlAll * VdagCq;
+				gradcomponent += Cq.qnum->weight*trace(Fq * dagger(VdagCq) * MatomVdagC).real();
+			}
+			
+			double invVol = 1.0/gInfo.detR;
+			initZero(Vlocps, gInfo);
+			initZero(rhoIon, gInfo);
+	
+			callPref(::updateLocal)(gInfo.S, gInfo.GGT,
+				Vlocps->dataPref(), rhoIon->dataPref(), 0, 0, 0,
+				1, atposManaged.dataPref()+n, invVol, sp->VlocRadial,
+				sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
+			
+			Vlocps += (*e->coulomb)(rhoIon, Coulomb::PointChargeRight);
+			
+			ScalarFieldTilde nTilde = J(e->eVars.get_nTot());
+	
+			// Local part of pseudopotential:
+			gradcomponent += dot(nTilde, O(Vlocps));
+			
+			gradcomponent += sp->Z * mu;
+			
+			grad[species][n].push_back(gradcomponent);
+		}
+	}
+	return 0;
 }
 
 //-------------- DFT + U --------------------
@@ -199,6 +290,7 @@ void SpeciesInfo::rhoAtom_getV(const ColumnBundle& Cq, const matrix* U_rhoAtomPt
 void SpeciesInfo::updateLocal(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
 	ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const
 {	if(!atpos.size()) return; //unused species
+	if(isMixed) return;
 	((SpeciesInfo*)this)->updateLatticeDependent(); //update lattice dependent quantities (if lattice vectors have changed)
 	const GridInfo& gInfo = e->gInfo;
 
@@ -215,6 +307,38 @@ void SpeciesInfo::updateLocal(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon
 		atpos.size(), atposManaged.dataPref(), invVol, VlocRadial,
 		Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
 }
+
+
+void SpeciesInfo::updateLocalMixed(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
+	ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const
+{	if(!atpos.size()) return; //unused species
+	if (!isMixed) return;
+
+	//((SpeciesInfo*)this)->updateLatticeDependent(); //update lattice dependent quantities (if lattice vectors have changed)
+	const GridInfo& gInfo = e->gInfo;
+
+	//Prepare optional outputs:
+	complex *nChargeballData=0, *nCoreData=0, *tauCoreData=0;
+	if(Z_chargeball) { nullToZero(nChargeball, gInfo); nChargeballData = nChargeball->dataPref(); die("Error");}
+	if(nCoreRadial) { nullToZero(nCore, gInfo); nCoreData = nCore->dataPref(); die("Error"); }
+	if(tauCoreRadial) { nullToZero(tauCore, gInfo); tauCoreData = tauCore->dataPref();  die("Error");}
+
+
+		for (int species = 0; species < mixSpecies.size(); species++) {
+
+			for (int n = 0; n < atpos.size(); n ++) {
+				auto sp = mixSpecies[species];
+
+				//Calculate in half G-space:
+				double invVol = 1.0/gInfo.detR*mixRatio[n][species];
+				callPref(::updateLocal)(gInfo.S, gInfo.GGT,
+					Vlocps->dataPref(), rhoIon->dataPref(), nChargeballData, nCoreData, tauCoreData,
+					1, atposManaged.dataPref()+n, invVol, sp->VlocRadial,
+					sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
+			}
+		}
+
+	}
 
 
 std::vector< vector3<double> > SpeciesInfo::getLocalForces(const ScalarFieldTilde& ccgrad_Vlocps,
@@ -322,7 +446,8 @@ std::shared_ptr<ColumnBundle> SpeciesInfo::getV(const ColumnBundle& Cq, const ve
 	const Basis& basis = *(Cq.basis);
 	std::pair<vector3<>,const Basis*> cacheKey = std::make_pair(qnum.k, &basis);
 	int nProj = MnlAll.nRows() / e->eInfo.spinorLength();
-	if(!nProj) return 0; //purely local psp
+	if(!nProj || !atpos.size()) return 0; //purely local psp
+	//TODO
 	//First check cache
 	if(e->cntrl.cacheProjectors && (!derivDir) && (!stressDir))
 	{	auto iter = cachedV.find(cacheKey);
@@ -344,5 +469,40 @@ std::shared_ptr<ColumnBundle> SpeciesInfo::getV(const ColumnBundle& Cq, const ve
 	//Add to cache if necessary:
 	if(e->cntrl.cacheProjectors && (!derivDir) && (!stressDir))
 		((SpeciesInfo*)this)->cachedV[cacheKey] = V;
+	return V;
+}
+
+
+std::shared_ptr<ColumnBundle> SpeciesInfo::getVmixed(const ColumnBundle& Cq, int species, int atom) const
+{	const QuantumNumber& qnum = *(Cq.qnum);
+	const Basis& basis = *(Cq.basis);
+	std::tuple<vector3<>,const Basis*,int,int> cacheKey = std::make_tuple(qnum.k, &basis, species, atom);
+	if(!isMixed) return 0; //purely local psp
+	
+	//First check cache
+	if(e->cntrl.cacheProjectors)
+	{	auto iter = cachedVmixed.find(cacheKey);
+		if(iter != cachedVmixed.end()) //found
+			return iter->second; //return cached value
+	}
+	
+	auto sp = mixSpecies[species];
+	int nProj = sp->MnlAll.nRows() / e->eInfo.spinorLength();
+	
+	std::shared_ptr<ColumnBundle> V = std::make_shared<ColumnBundle>(nProj, basis.nbasis, &basis, &qnum, isGpuEnabled()); //not a spinor regardless of spin type
+	int iProj = 0;
+
+	for(int l=0; l<int(sp->VnlRadial.size()); l++)
+		for(unsigned p=0; p<sp->VnlRadial[l].size(); p++)
+			for(int m=-l; m<=l; m++)
+			{	size_t offs = iProj * basis.nbasis;
+				size_t atomStride = nProj * basis.nbasis;
+				callPref(Vnl)(basis.nbasis, atomStride, 1, l, m, qnum.k, basis.iGarr.dataPref(),
+				basis.gInfo->G, atposManaged.dataPref()+atom, mixSpecies[species]->VnlRadial[l][p], V->dataPref()+offs);
+				iProj++;
+			}
+	//Add to cache if necessary:
+	if(e->cntrl.cacheProjectors)
+		((SpeciesInfo*)this)->cachedVmixed[cacheKey] = V;
 	return V;
 }
