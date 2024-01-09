@@ -171,7 +171,7 @@ public:
 		}
 	}
 	
-	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRTptr) const
+	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRTptr, MixGradient* mixgrad, const Everything* e) const
 	{	if(!atoms.size()) return 0.;
 		double eta = sqrt(0.5)/sigma, etaSq=eta*eta;
 		matrix3<> E_RRT; //stress * volume (computed if E_RRTptr non-null)

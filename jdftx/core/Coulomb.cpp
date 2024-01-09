@@ -247,7 +247,7 @@ matrix3<> Coulomb::latticeGradient(const complexScalarFieldTilde& X, vector3< do
 }
 
 
-double Coulomb::energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT) const
+double Coulomb::energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT, MixGradient* mixgrad, const Everything* e) const
 {	if(!ewald) ((Coulomb*)this)->ewald = createEwald(gInfo.R, atoms.size());
 	double Eewald = 0.;
 	
@@ -293,7 +293,7 @@ double Coulomb::energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT) const
 			a.force = embedScaleMat * a.force;
 		}
 	}
-	else Eewald = ewald->energyAndGrad(atoms, E_RRT);
+	else Eewald = ewald->energyAndGrad(atoms, E_RRT, mixgrad, e);
 	
 	//Electric field contributions if any:
 	if(params.Efield.length_squared())

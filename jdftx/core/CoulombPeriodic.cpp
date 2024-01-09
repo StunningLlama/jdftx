@@ -21,6 +21,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/Coulomb_internal.h>
 #include <core/CoulombKernel.h>
 #include <core/BlasExtra.h>
+#include <electronic/Everything.h>
 
 //! Standard 3D Ewald sum
 class EwaldPeriodic : public Ewald
@@ -57,7 +58,7 @@ public:
 		Nrecip.print(globalLog, " %d ");
 	}
 
-	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRTptr) const
+	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRTptr, MixGradient* mixgrad, const Everything* e) const
 	{	double eta = sqrt(0.5)/sigma, etaSq=eta*eta;
 		double sigmaSq = sigma * sigma;
 		double detR = fabs(det(R)); //cell volume
@@ -74,6 +75,20 @@ public:
 			- 0.5 * ZsqTot * eta * (2./sqrt(M_PI)); //Self-energy correction
 		if(E_RRTptr)
 			E_RRT = (-0.5 * 4*M_PI * Ztot*Ztot * (-0.5*sigmaSq) / detR) * matrix3<>(1,1,1);
+		
+		
+		if (mixgrad) {
+			for(const Atom& a: atoms) {
+				auto sp = e->iInfo.species[a.sp];
+				if(sp->isMixed) {
+					for (int m = 0; m < sp->mixSpecies.size(); m++) {
+						double dE = 4*M_PI * sp->mixSpecies[m]->Z*Ztot * (-0.5*sigmaSq) / detR
+						- sp->mixSpecies[m]->Z*a.Z * eta * (2./sqrt(M_PI));
+						(*mixgrad)[a.sp][a.n][m] += dE;
+					}
+				}
+			}
+		}
 		
 		//Reduce positions to first centered unit cell:
 		for(Atom& a: atoms)
@@ -99,8 +114,16 @@ public:
 							{	vector3<> rVec = R * x;
 								E_RRT -= (0.5*minus_E_r_by_r) * outer(rVec,rVec);
 							}
+							if (mixgrad)
+							{
+								auto sp = e->iInfo.species[a1.sp];
+								if(sp->isMixed) {
+									for (int m = 0; m < sp->mixSpecies.size(); m++) {
+										(*mixgrad)[a1.sp][a1.n][m] += sp->mixSpecies[m]->Z * a2.Z * erfc(eta*r)/r;
+									}
+								}
+							}
 						}
-		
 		
 		//Reciprocal space sum:
 		vector3<int> iG; //integer reciprocal cell number
@@ -124,6 +147,17 @@ public:
 					{	vector3<> Gcart = iG * G;
 						double minus_eGprime_by_G = eG * (sigmaSq + 2./Gsq);
 						E_RRT += (0.5*SG.norm()) * (minus_eGprime_by_G * outer(Gcart,Gcart) - eG*matrix3<>(1,1,1));
+					}
+					if (mixgrad) {
+						for(const Atom& a: atoms) {
+							auto sp = e->iInfo.species[a.sp];
+							if(sp->isMixed) {
+								for (int m = 0; m < sp->mixSpecies.size(); m++) {
+									complex dSG = sp->mixSpecies[m]->Z * cis(-2*M_PI*dot(iG,a.pos));
+									(*mixgrad)[a.sp][a.n][m] += eG*(SG.conj() * dSG).real();
+								}
+							}
+						}
 					}
 				}
 		

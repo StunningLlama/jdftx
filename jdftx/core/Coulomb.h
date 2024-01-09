@@ -24,6 +24,7 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/string.h>
 #include <memory>
 #include <set>
+#include <electronic/MixGradient.h>
 
 //! @addtogroup LongRange
 //! @{
@@ -99,9 +100,10 @@ struct Atom
 	vector3<> force; //!< force in lattice coordinates (contravariant)
 	int atomicNumber; //!< atomic number
 	int sp; //!< species index for atom; used for VDW
+	int n; //!< TODO
 	
-	Atom(double Z, vector3<> pos, vector3<> force=vector3<>(0,0,0), int atomicNumber=0, int sp=0)
-	: Z(Z), pos(pos), force(force), atomicNumber(atomicNumber), sp(sp)
+	Atom(double Z, vector3<> pos, vector3<> force=vector3<>(0,0,0), int atomicNumber=0, int sp=0, int n=0)
+	: Z(Z), pos(pos), force(force), atomicNumber(atomicNumber), sp(sp), n(n)
 	{
 	}
 };
@@ -115,7 +117,7 @@ public:
 	//!The implementation will shift each Atom::pos by lattice vectors to bring it to
 	//!the fundamental zone (or Wigner-Seitz cell as appropriate)
 	//!If E_RRT is non-null, accumulate contrbutions to the symmetric lattice derivative (stress * volume)
-	virtual double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT=0) const=0;
+	virtual double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT=0, MixGradient* mixgrad = 0, const Everything* e = 0) const=0;
 };
 
 
@@ -144,7 +146,7 @@ public:
 	//! Create the appropriate Ewald class, if required, and call Ewald::energyAndGrad
 	//! Includes interaction with Efield, if present (Requires embedded truncation)
 	//!If E_RRT is non-null, accumulate contrbutions to the symmetric lattice derivative (stress * volume)
-	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT=0) const; 
+	double energyAndGrad(std::vector<Atom>& atoms, matrix3<>* E_RRT=0, MixGradient* mixgrad = 0, const Everything* e = 0) const; 
 
 	//! Generate the potential due to the Efield (if any) (Requires embedded truncation)
 	ScalarField getEfieldPotential() const;

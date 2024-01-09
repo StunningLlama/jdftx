@@ -360,6 +360,7 @@ double IonInfo::accumMixGradient(std::vector<diagMatrix> &F, std::vector<ColumnB
 			species->accumMixGradient(sp, F, C, grad);
 		}
 	}
+	pairPotentialsAndGrad(0, 0, 0, &grad);
 	return 0;
 }
 
@@ -624,7 +625,7 @@ void getForcesFromAtoms(const std::vector<Atom>& atoms, IonicGradient& forces)
 			force_sp_at = (atom++)->force;
 }
 
-void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matrix3<>* E_RRT) const
+void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matrix3<>* E_RRT, MixGradient* mixgrad) const
 {
 	//Obtain the list of atomic positions and charges:
 	std::vector<Atom> atoms;
@@ -632,8 +633,8 @@ void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matri
 	for(size_t spIndex=0; spIndex<species.size(); spIndex++)
 	{	const SpeciesInfo& sp = *species[spIndex];
 		if (!sp.isMixed) {
-			for(const vector3<>& pos: sp.atpos) {
-				atoms.push_back(Atom(Zscale*sp.Z, pos, vector3<>(0.,0.,0.), sp.atomicNumber, spIndex));
+			for(int n = 0; n < sp.atpos.size(); n++) {
+				atoms.push_back(Atom(Zscale*sp.Z, sp.atpos[n], vector3<>(0.,0.,0.), sp.atomicNumber, spIndex, n));
 			}
 		} else {
 			for (int n = 0; n < sp.atpos.size(); n ++) {
@@ -642,13 +643,13 @@ void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matri
 					auto spm = sp.mixSpecies[m];
 					Z += spm->Z*sp.mixRatio[n][m];
 				}
-				atoms.push_back(Atom(Zscale*Z, sp.atpos[n], vector3<>(0.,0.,0.), 0, spIndex));
+				atoms.push_back(Atom(Zscale*Z, sp.atpos[n], vector3<>(0.,0.,0.), 0, spIndex, n));
 			}
 		}
 	}
 	
 	//Compute Ewald sum and gradients (this also moves each Atom::pos into fundamental zone)
-	double Eewald = e->coulomb->energyAndGrad(atoms, E_RRT);
+	double Eewald = e->coulomb->energyAndGrad(atoms, E_RRT, mixgrad, e);
 	//Compute optional pair-potential terms:
 	double EvdW = 0.;
 	if(vdWenable or ljOverride)
