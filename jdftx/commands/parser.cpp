@@ -365,13 +365,26 @@ void parse(std::vector< pair<string,string> > input, Everything& everything, boo
 					safeProcess(c, "", everything, encountered, errors);
 			}
 		//Remove unused pseudopotentials as soon as ion command has been processed:
-		//TODO
-		if(encounteredIon && false)
+		if(encounteredIon)
 		{	species = everything.iInfo.species; //backup of species that retains unused ones
-			for(auto iter=everything.iInfo.species.begin(); iter!=everything.iInfo.species.end();)
-				if(not (*iter)->atpos.size())
+			for(auto iter=everything.iInfo.species.begin(); iter!=everything.iInfo.species.end();) {
+				bool unused = true;
+				if((*iter)->atpos.size())
+					unused = false;
+				
+				for (int i = 0; i < everything.iInfo.species.size(); i++) {
+					if (!everything.iInfo.species[i]->isMixed) continue;
+					for (int m = 0; m < everything.iInfo.species[i]->mixSpecies.size(); m++) {
+						if (everything.iInfo.species[i]->mixSpecies[m] == (*iter)) {
+							unused = false;
+						}
+					}
+				}
+					
+				if (unused)
 					iter = everything.iInfo.species.erase(iter);
 				else iter++;
+			}
 		}
 	}
 	//Quit on errors:

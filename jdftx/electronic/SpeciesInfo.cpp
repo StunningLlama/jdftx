@@ -140,7 +140,7 @@ const std::vector<string>& getPseudopotentialPrefixes(); //implemented in ion_sp
 
 void SpeciesInfo::setup(const Everything &everything)
 {	e = &everything;
-	logPrintf("HI!!");
+	//logPrintf("HI!!");
 	//if(!atpos.size()) return; //unused species
 	//TODO
 

@@ -110,7 +110,7 @@ struct CommandIonSpecies : public Command
 	void printStatus(Everything& e, int iRep)
 	{	int iPrint=0;
 		for(auto sp: e.iInfo.species)
-			if(not sp->fromWildcard)
+			if(not sp->fromWildcard && !sp->isMixed)
 			{	if(iPrint==iRep) { logPrintf("%s", sp->potfilename.c_str()); return; }
 				iPrint++;
 			}
@@ -131,7 +131,7 @@ struct CommandAddMix : public Command
 
 		format = "<name> [species 1] [species 2] ...";
 		comments =
-			"TODO";
+			"Add mixed atom type consisting of multiple species.";
 
 		allowMultiple = true;
 
@@ -174,7 +174,19 @@ struct CommandAddMix : public Command
 
 	void printStatus(Everything& e, int iRep)
 	{
-
+		int index = 0;
+		for (auto sp : e.iInfo.species) {
+			if (sp->isMixed) {
+				if (index == iRep) {
+					
+					logPrintf("%s ", sp->name.c_str());
+					for (int m = 0; m < sp->mixSpecies.size(); m++) {
+						logPrintf("%s ", sp->mixSpecies[m]->name.c_str());
+					}
+				}
+				index++;
+			}
+		}
 	}
 }
 commandAddMix;

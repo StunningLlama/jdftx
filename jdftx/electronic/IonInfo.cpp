@@ -74,8 +74,12 @@ void IonInfo::setup(const Everything &everything)
 	for(auto sp: species)
 	{	nAtomsTot += sp->atpos.size();
 		sp->setup(*e);
-		if (sp->isMixed)
+		if (sp->isMixed) {
 			hasMixedAtoms = true;
+			for (int n = 0; n < sp->mixRatio.size(); n++) {
+				assert(sp->mixRatio[n].size() == sp->mixSpecies.size());
+			}
+		}
 	}
 	logPrintf("\nInitialized %d species with %d total atoms.\n", int(species.size()), nAtomsTot);
 	if(!nAtomsTot) logPrintf("Warning: no atoms in the calculation.\n");

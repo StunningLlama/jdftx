@@ -97,6 +97,9 @@ void ElecInfo::setup(const Everything &everything, std::vector<diagMatrix>& F, E
 		nElectrons += nsElectrons[s];
 	}
 	
+	if (e->iInfo.hasMixedAtoms && fillingsUpdate != FillingsHsub)
+		die("Please enable smearing for mixed atom calculations.\n");
+	
 	//--- Calculate nBands if elec-n-bands not given:
 	if(!nBands)
 	{	double nsElectronsMax = *std::max_element(nsElectrons.begin(), nsElectrons.end());

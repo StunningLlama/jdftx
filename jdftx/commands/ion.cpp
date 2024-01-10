@@ -54,6 +54,7 @@ struct CommandIon : public Command
 		allowMultiple = true;
 
 		require("ion-species");
+		require("add-mix");
 		//Dependencies due to coordinate system option:
 		require("latt-scale");
 		require("coords-type");
@@ -165,7 +166,12 @@ struct CommandIon : public Command
 					vector3<> pos = sp->atpos[at];
 					if(e.iInfo.coordsType == CoordsCartesian)
 						pos = e.gInfo.R * pos; //report cartesian positions
-					logPrintf("%s %19.15lf %19.15lf %19.15lf", sp->name.c_str(), pos[0], pos[1], pos[2]);
+					logPrintf("%s", sp->name.c_str());
+					if (sp->isMixed)
+						for (int m = 0; m < sp->mixRatio[at].size(); m++)
+							logPrintf("%19.15lf ", sp->mixRatio[at][m]);
+						
+					logPrintf("%19.15lf %19.15lf %19.15lf", pos[0], pos[1], pos[2]);
 					//Optional velocity:
 					vector3<> vel = sp->velocities[at];
 					if(not std::isnan(vel.length_squared()))
