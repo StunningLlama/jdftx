@@ -140,10 +140,7 @@ const std::vector<string>& getPseudopotentialPrefixes(); //implemented in ion_sp
 
 void SpeciesInfo::setup(const Everything &everything)
 {	e = &everything;
-	//logPrintf("HI!!");
 	//if(!atpos.size()) return; //unused species
-	//TODO
-
 
 	if (!isMixed) {
 		//Read pseudopotential
@@ -405,7 +402,8 @@ void SpeciesInfo::updateLatticeDependent()
 
 	//Change radial function extents if R has changed:
 	if(Rchanged)
-	{	int nGridLoc = int(ceil(gInfo.GmaxGrid/gInfo.dGradial))+5;
+	{	assert(!isMixed);
+		int nGridLoc = int(ceil(gInfo.GmaxGrid/gInfo.dGradial))+5;
 		VlocRadial.updateGmax(0, nGridLoc);
 		nCoreRadial.updateGmax(0, nGridLoc);
 		tauCoreRadial.updateGmax(0, nGridLoc);
@@ -416,7 +414,8 @@ void SpeciesInfo::updateLatticeDependent()
 	
 	//Update Qradial indices, matrix and nagIndex if not previously init'd, or if R has changed:
 	if(Qint.size() && (Rchanged || !QradialMat))
-	{	int nCoeffHlf = (Qradial.cbegin()->second.nCoeff+1)/2; //pack real radial functions into complex numbers
+	{	assert(!isMixed);
+		int nCoeffHlf = (Qradial.cbegin()->second.nCoeff+1)/2; //pack real radial functions into complex numbers
 		int nCoeff = 2*nCoeffHlf;
 		//Qradial:
 		QradialMat = zeroes(nCoeffHlf, Qradial.size());

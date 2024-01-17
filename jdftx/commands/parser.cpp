@@ -372,15 +372,15 @@ void parse(std::vector< pair<string,string> > input, Everything& everything, boo
 				if((*iter)->atpos.size())
 					unused = false;
 				
-				for (int i = 0; i < everything.iInfo.species.size(); i++) {
+				for (unsigned int i = 0; i < everything.iInfo.species.size(); i++) {
 					if (!everything.iInfo.species[i]->isMixed) continue;
-					for (int m = 0; m < everything.iInfo.species[i]->mixSpecies.size(); m++) {
+					for (unsigned int m = 0; m < everything.iInfo.species[i]->mixSpecies.size(); m++) {
 						if (everything.iInfo.species[i]->mixSpecies[m] == (*iter)) {
 							unused = false;
 						}
 					}
 				}
-					
+				
 				if (unused)
 					iter = everything.iInfo.species.erase(iter);
 				else iter++;

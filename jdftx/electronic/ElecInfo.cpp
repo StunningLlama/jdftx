@@ -84,9 +84,9 @@ void ElecInfo::setup(const Everything &everything, std::vector<diagMatrix>& F, E
 			if (!sp->isMixed)
 				nsElectrons[s] += sp->Z * sp->atpos.size() * (1./nsElectrons.size());
 			else {
-				for (int natom = 0; natom < sp->atpos.size(); natom++) {
-					for (auto mixid = 0; mixid < sp->mixSpecies.size(); mixid++) {
-						nsElectrons[s] += sp->mixRatio[natom][mixid]*sp->mixSpecies[mixid]->Z * (1./nsElectrons.size());
+				for (unsigned int natom = 0; natom < sp->atpos.size(); natom++) {
+					for (unsigned int mixid = 0; mixid < sp->mixSpecies.size(); mixid++) {
+						nsElectrons[s] += sp->mixRatio[mixid][natom]*sp->mixSpecies[mixid]->Z * (1./nsElectrons.size());
 					}
 				}
 			}

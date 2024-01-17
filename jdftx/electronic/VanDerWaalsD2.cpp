@@ -235,7 +235,7 @@ double VanDerWaalsD2::energyAndGrad(const std::vector< std::vector< vector3<> > 
 		int nAtoms = atpos[i].size(); //number of atoms of ith species
 		
 		const ManagedArray<vector3<>> atposTemp(atpos[i]);
-		callPref(getSG)(gInfo.S, nAtoms, atposTemp.dataPref(), 1./gInfo.detR, SG->dataPref()); //get structure factor SG for atom type i
+		callPref(getSG)(gInfo.S, nAtoms, atposTemp.dataPref(), 0, 1./gInfo.detR, SG->dataPref()); //get structure factor SG for atom type i
 		
 		for(unsigned j=0; j<atomicNumber.size(); j++) //Loop over sites in the fluid
 			if(atomicNumber[j]) //Check to make sure fluid site should include van der Waals corrections

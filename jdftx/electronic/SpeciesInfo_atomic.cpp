@@ -49,7 +49,8 @@ void axpy(double alpha, const RadialFunctionR& X, RadialFunctionR& Y)
 
 
 void SpeciesInfo::accumulateAtomicDensity(ScalarFieldTildeArray& nTilde) const
-{	//Collect list of distinct magnetizations and corresponding atom positions:
+{	assert(!isMixed);
+	//Collect list of distinct magnetizations and corresponding atom positions:
 	struct MomentDirection //list of atoms with same magnetic moment
 	{	vector3<> Mhat;
 		std::vector< vector3<> > atpos;
@@ -112,7 +113,7 @@ void SpeciesInfo::accumulateAtomicDensity(ScalarFieldTildeArray& nTilde) const
 		{	//Compute structure factor for atoms with current magnetization vector:
 			ManagedArray<vector3<>> atposCur(Mdir.atpos);
 			ScalarFieldTilde SG; nullToZero(SG, e->gInfo);
-			callPref(getSG)(e->gInfo.S, Mdir.atpos.size(), atposCur.dataPref(), 1./e->gInfo.detR, SG->dataPref());
+			callPref(getSG)(e->gInfo.S, Mdir.atpos.size(), atposCur.dataPref(), 0, 1./e->gInfo.detR, SG->dataPref());
 			//Spin-densities in diagonal basis
 			std::vector<ScalarFieldTilde> nDiag;
 			for(const RadialFunctionG& nRad: nRadial)
@@ -140,20 +141,24 @@ void SpeciesInfo::accumulateAtomicDensity(ScalarFieldTildeArray& nTilde) const
 }
 
 void SpeciesInfo::accumulateAtomicPotential(ScalarFieldTilde& dTilde) const
-{	//Get radial potential due to one atom:
+{	assert(!isMixed);
+	//Get radial potential due to one atom:
 	RadialFunctionG dRadial;
 	getAtomPotential(dRadial);
 	//Gets tructure factor:
 	ScalarFieldTilde SG; nullToZero(SG, e->gInfo);
-	callPref(getSG)(e->gInfo.S, atpos.size(), atposManaged.dataPref(), 1./e->gInfo.detR, SG->dataPref());
+	callPref(getSG)(e->gInfo.S, atpos.size(), atposManaged.dataPref(), 0, 1./e->gInfo.detR, SG->dataPref());
 	//Accumulate contrbutions:
 	dTilde += dRadial * SG;
 	dRadial.free();
 }
 
 //Set atomic orbitals in column bundle from radial functions (almost same operation as setting Vnl)
-void SpeciesInfo::setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset, const vector3<>* derivDir, const int stressDir) const
-{	if(!atpos.size()) return;
+void SpeciesInfo::setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset, const vector3<>* derivDir, const int stressDir, const std::vector<vector3<> >* mixatpos, const vector3<>* mixatposdatapref) const
+{	if(!atpos.size() && !mixatpos) return;
+	if (isMixed)
+		return mixSpecies[mixOrbitalSpecies]->setAtomicOrbitals(Y, applyO, colOffset, derivDir, stressDir, &atpos, atposManaged.dataPref());
+	//assert(!isMixed);
 	const auto& fRadial = applyO ? OpsiRadial : psiRadial; //!< select radial function set (psi or Opsi)
 	int nSpinCopies = 2/e->eInfo.qWeightSum;
 	int nOrbitalsPerAtom = 0;
@@ -166,8 +171,10 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset,
 			iCol += (2*l+1)*nSpinCopies;
 		}
 }
-void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, int l, int colOffset, int atomColStride, const vector3<>* derivDir, const int stressDir) const
-{	if(!atpos.size()) return;
+void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, int l, int colOffset, int atomColStride, const vector3<>* derivDir, const int stressDir, const std::vector<vector3<> >* mixatpos, const vector3<>* mixatposdatapref) const
+{	if(!atpos.size() && !mixatpos) return;
+	int atoms = mixatpos? mixatpos->size() : atpos.size();
+	assert(!isMixed);
 	assert(l < int(psiRadial.size()));
 	assert(int(n) < nAtomicOrbitals(l));
 	const auto& fRadial = applyO ? OpsiRadial : psiRadial; //!< select radial function set (psi or Opsi)
@@ -175,7 +182,7 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 	int nOrbitalsPerAtom = (2*l+1)*nSpinCopies;
 	if(atomColStride) assert(atomColStride >= nOrbitalsPerAtom); else atomColStride = nOrbitalsPerAtom;
 	assert(psi.basis); assert(psi.qnum);
-	assert(colOffset + atomColStride*int(atpos.size()-1) + nOrbitalsPerAtom <= psi.nCols());
+	assert(colOffset + atomColStride*int(atoms-1) + nOrbitalsPerAtom <= psi.nCols());
 	if(nSpinCopies>1) assert(psi.isSpinor()); //can have multiple spinor copies only in spinor mode
 	const Basis& basis = *psi.basis;
 	if(isRelativistic() && l>0)
@@ -190,13 +197,13 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 				}
 		}
 		//Initialize a non-spinor ColumnBundle containing all m's for both j functions:
-		ColumnBundle V(atpos.size()*nOrbitalsPerAtom, basis.nbasis, &basis, psi.qnum, isGpuEnabled());
+		ColumnBundle V(atoms*nOrbitalsPerAtom, basis.nbasis, &basis, psi.qnum, isGpuEnabled());
 		int iCol=0;
 		for(int p: pArr) for(int m=-l; m<=l; m++)
 		{	size_t atomStride = V.colLength() * nOrbitalsPerAtom;
 			size_t offs = iCol * V.colLength();
-			callPref(Vnl)(basis.nbasis, atomStride, atpos.size(), l, m, psi.qnum->k, basis.iGarr.dataPref(),
-				e->gInfo.G, atposManaged.dataPref(), fRadial[l][p], V.dataPref()+offs, derivDir, stressDir);
+			callPref(Vnl)(basis.nbasis, atomStride, atoms, l, m, psi.qnum->k, basis.iGarr.dataPref(),
+				e->gInfo.G, mixatpos?mixatposdatapref:atposManaged.dataPref(), fRadial[l][p], V.dataPref()+offs, derivDir, stressDir);
 			iCol++;
 		}
 		//Transform the non-spinor ColumnBundle to the spinorial j eigenfunctions:
@@ -204,7 +211,7 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 		matrix transform = zeroes(2*N, N);
 		transform.set(0,N,   0,2*l, getYlmToSpinAngleMatrix(l, 2*l-1));
 		transform.set(N,2*N, 2*l,N, getYlmToSpinAngleMatrix(l, 2*l+1));
-		for(size_t a=0; a<atpos.size(); a++)
+		for(size_t a=0; a<atoms; a++)
 			psi.setSub(colOffset+a*atomColStride, V.getSub(a*N,(a+1)*N) * transform);
 	}
 	else
@@ -213,11 +220,11 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 		{	//Set atomic orbitals for all atoms at specified (n,l,m):
 			size_t atomStride = psi.colLength() * atomColStride;
 			size_t offs = iCol * psi.colLength();
-			callPref(Vnl)(basis.nbasis, atomStride, atpos.size(), l, m, psi.qnum->k, basis.iGarr.dataPref(),
-				e->gInfo.G, atposManaged.dataPref(), fRadial[l][n], psi.dataPref()+offs, derivDir, stressDir);
+			callPref(Vnl)(basis.nbasis, atomStride, atoms, l, m, psi.qnum->k, basis.iGarr.dataPref(),
+				e->gInfo.G, mixatpos?mixatposdatapref:atposManaged.dataPref(), fRadial[l][n], psi.dataPref()+offs, derivDir, stressDir);
 			if(nSpinCopies>1) //make copy for other spin
 			{	complex* dataPtr = psi.dataPref()+offs;
-				for(size_t a=0; a<atpos.size(); a++)
+				for(size_t a=0; a<atoms; a++)
 				{	callPref(eblas_zero)(2*basis.nbasis, dataPtr+basis.nbasis);
 					callPref(eblas_copy)(dataPtr+3*basis.nbasis, dataPtr, basis.nbasis);
 					dataPtr += atomStride;
@@ -229,16 +236,8 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 }
 int SpeciesInfo::nAtomicOrbitals() const
 {	
-	if (isMixed) {
-		int max = 0;
-		
-		for (int m = 0; m < mixSpecies.size(); m++) {
-			auto sp = mixSpecies[m];
-			max = std::max(sp->nAtomicOrbitals(), max);
-		}
-		
-		return max;
-	}
+	if (isMixed)
+		return mixSpecies[mixOrbitalSpecies]->nAtomicOrbitals();
 	
 	int nOrbitals = 0;
 	if(isRelativistic())
@@ -255,15 +254,18 @@ int SpeciesInfo::nAtomicOrbitals() const
 	}
 }
 int SpeciesInfo::lMaxAtomicOrbitals() const
-{	return int(psiRadial.size()) - 1;
+{	assert(!isMixed);
+	return int(psiRadial.size()) - 1;
 }
 int SpeciesInfo::nAtomicOrbitals(int l) const
-{	assert(l >= 0);
+{	assert(!isMixed);
+	assert(l >= 0);
 	if(unsigned(l) >= psiRadial.size()) return -1; //signals end of l
 	return psiRadial[l].size() / ((isRelativistic() && l>0) ? 2 : 1); //principal quantum number reduced by a factor of 2 when psiRadial counts the j splitting
 }
 int SpeciesInfo::atomicOrbitalOffset(unsigned int iAtom, unsigned int n, int l, int m, int s) const
-{	assert(iAtom < atpos.size());
+{	assert(!isMixed);
+	assert(iAtom < atpos.size());
 	assert(l >= 0); assert(unsigned(l) < psiRadial.size());
 	assert(s < e->eInfo.spinorLength());
 	assert(int(n) < nAtomicOrbitals(l));
@@ -289,7 +291,8 @@ int SpeciesInfo::atomicOrbitalOffset(unsigned int iAtom, unsigned int n, int l, 
 }
 
 void SpeciesInfo::estimateAtomEigs()
-{	if(!psiRadial.size()) return; //no orbitals
+{
+	if(!psiRadial.size() || isMixed) return; //no orbitals
 
 	//Compute eigenvalues if unavailable
 	if(!atomEigs.size())
@@ -348,7 +351,7 @@ void SpeciesInfo::estimateAtomEigs()
 }
 
 void SpeciesInfo::getAtom_nRadial(int spin, double magneticMoment, RadialFunctionG& nRadial, bool forceNeutral) const
-{
+{	assert(!isMixed);
 	int spinCount = (e->eInfo.nDensities==1 ? 1 : 2);
 	assert(spin >= 0); assert(spin < spinCount);
 	
@@ -436,7 +439,8 @@ void SpeciesInfo::getAtom_nRadial(int spin, double magneticMoment, RadialFunctio
 }
 
 void SpeciesInfo::getAtomPotential(RadialFunctionG& dRadial) const
-{	//Get the radial density of a neutral atom:
+{	assert(!isMixed);
+	//Get the radial density of a neutral atom:
 	RadialFunctionG nRadial;
 	logSuspend();
 	getAtom_nRadial(0,0, nRadial, true);

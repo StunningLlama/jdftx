@@ -81,7 +81,7 @@ public:
 			for(const Atom& a: atoms) {
 				auto sp = e->iInfo.species[a.sp];
 				if(sp->isMixed) {
-					for (int m = 0; m < sp->mixSpecies.size(); m++) {
+					for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
 						double dE = 4*M_PI * sp->mixSpecies[m]->Z*Ztot * (-0.5*sigmaSq) / detR
 						- sp->mixSpecies[m]->Z*a.Z * eta * (2./sqrt(M_PI));
 						(*mixgrad)[a.sp][a.n][m] += dE;
@@ -118,7 +118,7 @@ public:
 							{
 								auto sp = e->iInfo.species[a1.sp];
 								if(sp->isMixed) {
-									for (int m = 0; m < sp->mixSpecies.size(); m++) {
+									for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
 										(*mixgrad)[a1.sp][a1.n][m] += sp->mixSpecies[m]->Z * a2.Z * erfc(eta*r)/r;
 									}
 								}
@@ -152,7 +152,7 @@ public:
 						for(const Atom& a: atoms) {
 							auto sp = e->iInfo.species[a.sp];
 							if(sp->isMixed) {
-								for (int m = 0; m < sp->mixSpecies.size(); m++) {
+								for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
 									complex dSG = sp->mixSpecies[m]->Z * cis(-2*M_PI*dot(iG,a.pos));
 									(*mixgrad)[a.sp][a.n][m] += eG*(SG.conj() * dSG).real();
 								}

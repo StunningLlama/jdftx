@@ -266,14 +266,18 @@ void nAugmentGrad_gpu(int Nlm, const vector3<int> S, const matrix3<>& G,
 
 
 //!Get structure factor for a specific iG, given a list of atoms
-__hostanddev__ complex getSG_calc(const vector3<int>& iG, const int& nAtoms, const vector3<>* atpos)
+__hostanddev__ complex getSG_calc(const vector3<int>& iG, const int& nAtoms, const vector3<>* atpos, const double* scalefactor = 0)
 {	complex SG = complex(0,0);
-	for(int atom=0; atom<nAtoms; atom++)
-		SG += cis(-2*M_PI*dot(iG,atpos[atom]));
+	if (scalefactor)
+		for(int atom=0; atom<nAtoms; atom++)
+			SG += scalefactor[atom]*cis(-2*M_PI*dot(iG,atpos[atom]));
+	else
+		for(int atom=0; atom<nAtoms; atom++)
+			SG += cis(-2*M_PI*dot(iG,atpos[atom]));
 	return SG;
 }
 //!Get structure factor in a ScalarFieldTilde's data/dataGpu (with 1/vol normalization factor)
-void getSG(const vector3<int> S, int nAtoms, const vector3<>* atpos, double invVol, complex* SG);
+void getSG(const vector3<int> S, int nAtoms, const vector3<>* atpos, const double* scalefactor, double invVol, complex* SG);
 #ifdef GPU_ENABLED
 void getSG_gpu(const vector3<int> S, int nAtoms, const vector3<>* atpos, double invVol, complex* SG);
 #endif
@@ -281,14 +285,14 @@ void getSG_gpu(const vector3<int> S, int nAtoms, const vector3<>* atpos, double 
 //! Calculate local pseudopotential, ionic density and chargeball due to one species at a given G-vector
 __hostanddev__ void updateLocal_calc(int i, const vector3<int>& iG, const matrix3<>& GGT,
 	complex *Vlocps, complex *rhoIon, complex *nChargeball, complex* nCore, complex* tauCore,
-	int nAtoms, const vector3<>* atpos, double invVol, const RadialFunctionG& VlocRadial,
+	int nAtoms, const vector3<>* atpos, const double* scalefactor, double invVol, const RadialFunctionG& VlocRadial,
 	double Z, const RadialFunctionG& nCoreRadial, const RadialFunctionG& tauCoreRadial,
 	double Zchargeball, double wChargeballSq)
 {
 	double Gsq = GGT.metric_length_squared(iG);
 
 	//Compute structure factor (scaled by 1/detR):
-	complex SGinvVol = getSG_calc(iG, nAtoms, atpos) * invVol;
+	complex SGinvVol = getSG_calc(iG, nAtoms, atpos, scalefactor) * invVol;
 
 	//Short-ranged part of Local potential (long-ranged part added on later in IonInfo.cpp):
 	Vlocps[i] += SGinvVol * VlocRadial(sqrt(Gsq));
@@ -306,7 +310,7 @@ __hostanddev__ void updateLocal_calc(int i, const vector3<int>& iG, const matrix
 }
 void updateLocal(const vector3<int> S, const matrix3<> GGT,
 	complex *Vlocps,  complex *rhoIon, complex *n_chargeball, complex* n_core, complex* tauCore,
-	int nAtoms, const vector3<>* atpos, double invVol, const RadialFunctionG& VlocRadial,
+	int nAtoms, const vector3<>* atpos, const double* scalefactor, double invVol, const RadialFunctionG& VlocRadial,
 	double Z, const RadialFunctionG& nCoreRadial, const RadialFunctionG& tauCoreRadial,
 	double Zchargeball, double wChargeballSq);
 #ifdef GPU_ENABLED
@@ -383,7 +387,7 @@ void gradSGtoAtpos_gpu(const vector3<int> S, const vector3<> atpos,
 __hostanddev__ void gradLocalToStress_calc(int i, const vector3<int> iG, const vector3<int> S, const matrix3<> GGT,
 	const complex* ccgrad_Vlocps, const complex* ccgrad_rhoIon, const complex* ccgrad_nChargeball,
 	const complex* ccgrad_nCore, const complex* ccgrad_tauCore, symmetricMatrix3<>* grad_RRT,
-	int nAtoms, const vector3<>* atpos, const RadialFunctionG& VlocRadial, double Z,
+	int nAtoms, const vector3<>* atpos, const double* scalefactor, const RadialFunctionG& VlocRadial, double Z,
 	const RadialFunctionG& nCoreRadial, const RadialFunctionG& tauCoreRadial,
 	double Zchargeball, double wChargeballSq)
 {
@@ -402,7 +406,7 @@ __hostanddev__ void gradLocalToStress_calc(int i, const vector3<int> iG, const v
 	if(ccgrad_tauCore) ccgradRadial += ccgrad_tauCore[i] * tauCoreRadial.deriv(Gmag);
 	
 	//Compute structure factor:
-	complex SG = getSG_calc(iG, nAtoms, atpos);
+	complex SG = getSG_calc(iG, nAtoms, atpos, scalefactor);
 	
 	//Store result:
 	int weight = (((iG[2]==0) or (2*iG[2]==S[2])) ? 1 : 2); //weight factor for points in reduced reciprocal space of real scalar fields
@@ -411,7 +415,7 @@ __hostanddev__ void gradLocalToStress_calc(int i, const vector3<int> iG, const v
 void gradLocalToStress(const vector3<int> S, const matrix3<> GGT,
 	const complex* ccgrad_Vlocps, const complex* ccgrad_rhoIon, const complex* ccgrad_nChargeball,
 	const complex* ccgrad_nCore, const complex* ccgrad_tauCore, symmetricMatrix3<>* grad_RRT,
-	int nAtoms, const vector3<>* atpos, const RadialFunctionG& VlocRadial, double Z,
+	int nAtoms, const vector3<>* atpos, const double* scalefactor, const RadialFunctionG& VlocRadial, double Z,
 	const RadialFunctionG& nCoreRadial, const RadialFunctionG& tauCoreRadial,
 	double Zchargeball, double wChargeballSq);
 #ifdef GPU_ENABLED

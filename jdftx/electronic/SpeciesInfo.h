@@ -48,6 +48,7 @@ public:
 	bool fromWildcard; //!< whether this pseudopotential was automatically added using a wildcard (for command printing purposes only)
 	bool isMixed; //!< Is this a mixed atom
 	std::vector<std::shared_ptr<SpeciesInfo>> mixSpecies;
+	int mixOrbitalSpecies;
 	
 	std::vector<vector3<> > atpos; //!< array of atomic positions of this species
 	std::vector<vector3<> > velocities; //!< array of atomic velocities (NAN unless running MD) in lattice coordinates
@@ -97,7 +98,7 @@ public:
 	//! If derivDir is non-null, return the derivative with respct to Cartesian k direction *derivDir instead (never cached).
 	//! If stressDir is >=0, then calculate (i,j) component of dVnl/dR . RT where stressDir = 3*i+j
 	std::shared_ptr<ColumnBundle> getV(const ColumnBundle& Cq, const vector3<>* derivDir=0, const int stressDir=-1) const;
-	std::shared_ptr<ColumnBundle> getVmixed(const ColumnBundle& Cq, int species, int atom) const;
+	std::shared_ptr<ColumnBundle> getVmixed(const ColumnBundle& Cq, int species, int atom, const vector3<>* derivDir=0, const int stressDir=-1) const;
 	int nProjectors() const { return MnlAll.nRows() * atpos.size(); } //!< total number of projectors for all atoms in this species (number of columns in result of getV)
 	
 	//! Return non-local energy for this species and quantum number q and optionally accumulate
@@ -141,9 +142,9 @@ public:
 	void accumulateAtomicDensity(ScalarFieldTildeArray& nTilde) const; //!< Accumulate atomic density from this species
 	void accumulateAtomicPotential(ScalarFieldTilde& dTilde) const; //!< Accumulate electrostatic potential of neutral atoms from this species
 	void setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset=0,
-		const vector3<>* derivDir=0, const int stressDir=-1) const; //!< Calculate atomic orbitals with/without O preapplied (store in Y with an optional column offset, or calculate derivatives instead)
+		const vector3<>* derivDir=0, const int stressDir=-1, const std::vector<vector3<> >* mixatpos = 0, const vector3<>* mixatposdatapref = 0) const; //!< Calculate atomic orbitals with/without O preapplied (store in Y with an optional column offset, or calculate derivatives instead)
 	void setAtomicOrbitals(ColumnBundle& Y, bool applyO, unsigned n, int l, int colOffset=0, int atomColStride=0,
-		const vector3<>* derivDir=0, const int stressDir=-1) const;  //!< Same as above, but for specific n and l.
+		const vector3<>* derivDir=0, const int stressDir=-1, const std::vector<vector3<> >* mixatpos = 0, const vector3<>* mixatposdatapref = 0) const;  //!< Same as above, but for specific n and l.
 		//!< If non-zero, atomColStride overrides the number of columns between the same orbital of multiple atoms (default = number of orbitals at current n and l)
 	int nAtomicOrbitals() const; //!< return number of atomic orbitals in this species (all atoms)
 	int lMaxAtomicOrbitals() const; //!< return maximum angular momentum in available atomic orbitals
@@ -154,18 +155,17 @@ public:
 	//! Add contributions from this species to Vlocps, rhoIon, nChargeball and nCore/tauCore (if any)
 	void updateLocal(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
 		ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const; 
-
-	void updateLocalMixed(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
-		ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const;
-	
+		
 	//! Return the local forces (due to Vlocps, rhoIon, nChargeball and nCore/tauCore)
 	std::vector< vector3<> > getLocalForces(const ScalarFieldTilde& ccgrad_Vlocps, const ScalarFieldTilde& ccgrad_rhoIon,
 		const ScalarFieldTilde& ccgrad_nChargeball, const ScalarFieldTilde& ccgrad_nCore, const ScalarFieldTilde& ccgrad_tauCore) const;
-
+	
 	//! Return the local forces (due to Vlocps, rhoIon, nChargeball and nCore/tauCore)
 	matrix3<> getLocalStress(const ScalarFieldTilde& ccgrad_Vlocps, const ScalarFieldTilde& ccgrad_rhoIon,
 		const ScalarFieldTilde& ccgrad_nChargeball, const ScalarFieldTilde& ccgrad_nCore, const ScalarFieldTilde& ccgrad_tauCore) const;
 
+	void accumNonlocalForcesMixed(const ColumnBundle& Cq, const diagMatrix& Fq, std::vector<vector3<>>& forces, matrix3<>* Enl_RRT) const;
+		
 	//! Propagate gradient with respect to atomic projections (in E_VdagC, along with additional overlap contributions from grad_CdagOC) to forces
 	//! Additionally accumulate nonlocal stresses if Enl_RRT is non-null
 	void accumNonlocalForces(const ColumnBundle& Cq, const matrix& VdagC, const matrix& E_VdagC, const matrix& grad_CdagOCq, std::vector<vector3<> >& forces, matrix3<>* Enl_RRT) const;

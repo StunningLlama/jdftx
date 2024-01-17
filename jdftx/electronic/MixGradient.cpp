@@ -7,9 +7,9 @@ void MixGradient::print(Everything& e, FILE* fp) const
 	{	
 		auto species = e.iInfo.species[sp];
 		if (species->isMixed) {
-			for (int i = 0; i < species->atpos.size(); i++) {
+			for (unsigned int i = 0; i < species->atpos.size(); i++) {
 				fprintf(fp, "%-10s %3d ", species->name.c_str(), i);
-				for (int m = 0; m < species->mixSpecies.size(); m++) {
+				for (unsigned int m = 0; m < species->mixSpecies.size(); m++) {
 					fprintf(fp, "%19.12f ", e.iInfo.mixGradient[sp][i][m]);
 				}
 				fprintf(fp, "\n");

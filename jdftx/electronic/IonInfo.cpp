@@ -76,11 +76,33 @@ void IonInfo::setup(const Everything &everything)
 		sp->setup(*e);
 		if (sp->isMixed) {
 			hasMixedAtoms = true;
-			for (int n = 0; n < sp->mixRatio.size(); n++) {
-				assert(sp->mixRatio[n].size() == sp->mixSpecies.size());
+			assert(sp->mixRatio.size() == sp->mixSpecies.size());
+			for (unsigned int n = 0; n < sp->mixRatio.size(); n++) {
+				assert(sp->mixRatio[n].size() == sp->atpos.size());
 			}
 		}
 	}
+	for(auto sp: species)
+	{
+		if (sp->isMixed) {
+			for (auto spc: sp->mixSpecies) {
+				if (spc->isUltrasoft())
+					die("Mixed atoms cannot contain ultrasoft potentials.");
+			}
+			
+			
+			int max = 0;
+			for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
+				auto subsp = sp->mixSpecies[m];
+				if (subsp->nAtomicOrbitals() > max)
+				{
+					sp->mixOrbitalSpecies = m;
+					max = subsp->nAtomicOrbitals();
+				}
+			}
+		}
+	}
+	
 	logPrintf("\nInitialized %d species with %d total atoms.\n", int(species.size()), nAtomsTot);
 	if(!nAtomsTot) logPrintf("Warning: no atoms in the calculation.\n");
 	
@@ -183,9 +205,6 @@ void IonInfo::update(Energies& ener)
 	for(auto sp: species) //collect contributions to the above from all species
 		sp->updateLocal(Vlocps, rhoIon, nChargeball, nCoreTilde, tauCoreTilde);
 
-	for(auto sp: species) //collect contributions to the above from all species
-		sp->updateLocalMixed(Vlocps, rhoIon, nChargeball, nCoreTilde, tauCoreTilde);
-
 	//Add long-range part to Vlocps and smoothen rhoIon:
 	Vlocps += (*e->coulomb)(rhoIon, Coulomb::PointChargeRight);
 	if(computeStress and ionWidth)
@@ -236,8 +255,14 @@ double IonInfo::ionicEnergyAndGrad()
 	pairPotentialsAndGrad(0, &forcesPairPot, computeStress ? &E_RRT : 0);
 	e->symm.symmetrize(forcesPairPot);
 	forces = forcesPairPot;
-	if(shouldPrintForceComponents)
+	if(shouldPrintForceComponents) {
 		forcesPairPot.print(*e, globalLog, "forcePairPot");
+		if (computeStress) {
+			logPrintf("Stress tensor components:\n");
+			E_RRT.print(globalLog, "%12lg ", true, 1e-14);
+			logPrintf("\n");
+		}
+	}
 	
 	//---------- Local part: Vlocps, chargeball, partial core etc.: --------------
 	//compute the complex-conjugate gradient w.r.t the relevant densities/potentials:
@@ -277,9 +302,10 @@ double IonInfo::ionicEnergyAndGrad()
 	}
 	//Propagate those gradients to forces:
 	IonicGradient forcesLoc; forcesLoc.init(*this);
-	for(unsigned sp=0; sp<species.size(); sp++)
+	for(unsigned sp=0; sp<species.size(); sp++) {
 		forcesLoc[sp] = species[sp]->getLocalForces(ccgrad_Vlocps, ccgrad_rhoIon,
 			ccgrad_nChargeball, ccgrad_nCore, ccgrad_tauCore);
+	}
 	if(e->eVars.fluidSolver)  //include extra fluid forces (if any):
 	{	IonicGradient fluidForces;
 		e->eVars.fluidSolver->get_Adiel_and_grad(0, 0, &fluidForces);
@@ -291,10 +317,21 @@ double IonInfo::ionicEnergyAndGrad()
 		forcesLoc.print(*e, globalLog, "forceLoc");
 	//Propagate those gradients to stresses:
 	if(computeStress)
-	{	for(const auto& sp: species)
-			E_RRT += sp->getLocalStress(ccgrad_Vlocps, ccgrad_rhoIon,
+	{	
+		matrix3<> Eloc_RRT;
+		for(const auto& sp: species) {
+			Eloc_RRT += sp->getLocalStress(ccgrad_Vlocps, ccgrad_rhoIon,
 				ccgrad_nChargeball, ccgrad_nCore, ccgrad_tauCore);
-		E_RRT += e->coulomb->latticeGradient(ionWidth ? rhoIonBare : rhoIon, ccgrad_Vlocps, Coulomb::PointChargeLeft);
+		}
+		Eloc_RRT += e->coulomb->latticeGradient(ionWidth ? rhoIonBare : rhoIon, ccgrad_Vlocps, Coulomb::PointChargeLeft);
+		E_RRT += Eloc_RRT;
+		if(shouldPrintForceComponents) {
+			if (computeStress) {
+				logPrintf("Stress tensor components:\n");
+				Eloc_RRT.print(globalLog, "%12lg ", true, 1e-14);
+				logPrintf("\n");
+			}
+		}
 	}
 	
 	//--------- Forces due to nonlocal pseudopotential contributions ---------
@@ -309,18 +346,29 @@ double IonInfo::ionicEnergyAndGrad()
 		std::vector<matrix> HVdagCq(species.size()); 
 		EnlAndGrad(qnum, eVars.F[q], eVars.VdagC[q], HVdagCq);
 		augmentDensitySphericalGrad(qnum, eVars.VdagC[q], HVdagCq);
+		//EnlAndGradMixed(qnum, eVars.F[q], eVars.C[q], 0);
 		//Propagate to atomic positions:
-		for(unsigned sp=0; sp<species.size(); sp++) if(HVdagCq[sp])
-		{	matrix grad_CdagOCq = -(eVars.Hsub_eigs[q] * eVars.F[q]); //gradient of energy w.r.t overlap matrix
-			species[sp]->accumNonlocalForces(eVars.C[q], eVars.VdagC[q][sp], HVdagCq[sp]*eVars.F[q], grad_CdagOCq, forcesNL[sp], Enl_RRTptr);
+		for(unsigned sp=0; sp<species.size(); sp++)
+		{
+			if(HVdagCq[sp])
+			{	matrix grad_CdagOCq = -(eVars.Hsub_eigs[q] * eVars.F[q]); //gradient of energy w.r.t overlap matrix
+				species[sp]->accumNonlocalForces(eVars.C[q], eVars.VdagC[q][sp], HVdagCq[sp]*eVars.F[q], grad_CdagOCq, forcesNL[sp], Enl_RRTptr);
+			}
+			species[sp]->accumNonlocalForcesMixed(eVars.C[q], eVars.F[q], forcesNL[sp], Enl_RRTptr);
 		}
 	}
 	for(auto& force: forcesNL) //Accumulate contributions over processes
 		mpiWorld->allReduceData(force, MPIUtil::ReduceSum);
 	e->symm.symmetrize(forcesNL);
 	forces += forcesNL;
-	if(shouldPrintForceComponents)
+	if(shouldPrintForceComponents) {
 		forcesNL.print(*e, globalLog, "forceNL");
+		if (computeStress) {
+			logPrintf("Stress tensor components:\n");
+			Enl_RRT.print(globalLog, "%12lg ", true, 1e-14);
+			logPrintf("\n");
+		}
+	}
 	if(computeStress)
 	{	mpiWorld->allReduce(Enl_RRT, MPIUtil::ReduceSum);
 		E_RRT += Enl_RRT;
@@ -637,15 +685,15 @@ void IonInfo::pairPotentialsAndGrad(Energies* ener, IonicGradient* forces, matri
 	for(size_t spIndex=0; spIndex<species.size(); spIndex++)
 	{	const SpeciesInfo& sp = *species[spIndex];
 		if (!sp.isMixed) {
-			for(int n = 0; n < sp.atpos.size(); n++) {
+			for(unsigned int n = 0; n < sp.atpos.size(); n++) {
 				atoms.push_back(Atom(Zscale*sp.Z, sp.atpos[n], vector3<>(0.,0.,0.), sp.atomicNumber, spIndex, n));
 			}
 		} else {
-			for (int n = 0; n < sp.atpos.size(); n ++) {
+			for (unsigned int n = 0; n < sp.atpos.size(); n ++) {
 				double Z = 0;
-				for (int m = 0; m < sp.mixSpecies.size(); m++) {
+				for (unsigned int m = 0; m < sp.mixSpecies.size(); m++) {
 					auto spm = sp.mixSpecies[m];
-					Z += spm->Z*sp.mixRatio[n][m];
+					Z += spm->Z*sp.mixRatio[m][n];
 				}
 				atoms.push_back(Atom(Zscale*Z, sp.atpos[n], vector3<>(0.,0.,0.), 0, spIndex, n));
 			}

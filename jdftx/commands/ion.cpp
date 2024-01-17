@@ -67,15 +67,12 @@ struct CommandIon : public Command
 		if(!sp) throw string("Species "+id+" has not been defined");
 
 		if (sp->isMixed) {
-			std::vector<double> ratios;
-			for (int mixsp = 0; mixsp < sp->mixSpecies.size(); mixsp++) {
+			for (unsigned int mixsp = 0; mixsp < sp->mixSpecies.size(); mixsp++) {
 				double frac = 0.0;
 				ostringstream oss; oss << "mix frac " << mixsp;
 				pl.get(frac, 0., oss.str(), true);
-				ratios.push_back(frac);
+				sp->mixRatio[mixsp].push_back(frac);
 			}
-
-			sp->mixRatio.push_back(ratios);
 		}
 
 		//Read coordinates:
@@ -168,7 +165,7 @@ struct CommandIon : public Command
 						pos = e.gInfo.R * pos; //report cartesian positions
 					logPrintf("%s", sp->name.c_str());
 					if (sp->isMixed)
-						for (int m = 0; m < sp->mixRatio[at].size(); m++)
+						for (unsigned int m = 0; m < sp->mixRatio[at].size(); m++)
 							logPrintf("%19.15lf ", sp->mixRatio[at][m]);
 						
 					logPrintf("%19.15lf %19.15lf %19.15lf", pos[0], pos[1], pos[2]);

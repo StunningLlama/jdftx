@@ -134,18 +134,25 @@ struct CommandAddMix : public Command
 			"Add mixed atom type consisting of multiple species.";
 
 		allowMultiple = true;
+		hasDefault = true;
 
 		require("ion-species");
 	}
 
 	void process(ParamList& pl, Everything& e)
 	{
+		string name;
+		pl.get(name, string(), "name", false);
+		
+		if (name.empty())
+			return;
+		
 		std::shared_ptr<SpeciesInfo> specie(new SpeciesInfo);
 		specie->potfilename = "";
 		specie->fromWildcard = false;
 		specie->isMixed = true;
+		specie->name = name;
 
-		pl.get(specie->name, string(), "name", true);
 		//specie->name[0] = toupper(specie->name[0]);
 
 		for(auto sp: e.iInfo.species)
@@ -169,6 +176,7 @@ struct CommandAddMix : public Command
 			}
 
 			specie->mixSpecies.push_back(sp);
+			specie->mixRatio.push_back(std::vector<double>());
 		}
 	}
 
@@ -178,9 +186,8 @@ struct CommandAddMix : public Command
 		for (auto sp : e.iInfo.species) {
 			if (sp->isMixed) {
 				if (index == iRep) {
-					
 					logPrintf("%s ", sp->name.c_str());
-					for (int m = 0; m < sp->mixSpecies.size(); m++) {
+					for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
 						logPrintf("%s ", sp->mixSpecies[m]->name.c_str());
 					}
 				}

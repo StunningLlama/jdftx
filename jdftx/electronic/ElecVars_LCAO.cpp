@@ -150,7 +150,13 @@ struct LCAOminimizer : Minimizable<ElecGradient> //Uses only the Haux entries of
 int ElecVars::LCAO()
 {	const ElecInfo& eInfo = e->eInfo;
 	const IonInfo& iInfo = e->iInfo;
-	return 0;
+	
+	if (iInfo.hasMixedAtoms)
+	{
+		logPrintf("(LCAO disabled for mixed atom calculation)  ");
+		return 0;
+	}
+	
 	//Count total atomic orbitals:
 	int nAtomic = iInfo.nAtomicOrbitals();
 	if(nAtomic)

@@ -58,13 +58,13 @@ double SpeciesInfo::EnlAndGradMixed(const QuantumNumber& qnum, const diagMatrix&
 
 	double Enlq = 0.0;
 
-	for (int species = 0; species < mixSpecies.size(); species++) {
-		for (int n = 0; n < atpos.size(); n ++) {
+	for (unsigned int species = 0; species < mixSpecies.size(); species++) {
+		for (unsigned int n = 0; n < atpos.size(); n ++) {
 			auto sp = mixSpecies[species];
 
 			auto V = getVmixed(Cq, species, n);
 			
-			double mixfactor = mixRatio[n][species];
+			double mixfactor = mixRatio[species][n];
 			matrix VdagCq = (*V)^Cq;
 
 			matrix MatomVdagC = sp->MnlAll * VdagCq;
@@ -95,9 +95,9 @@ double SpeciesInfo::accumMixGradient(int species, std::vector<diagMatrix>& F, st
 	ScalarFieldTilde Vlocps;
 	ScalarFieldTilde rhoIon;
 	//logPrintf("GRADIENT ");
-	for (int n = 0; n < atpos.size(); n ++) {
+	for (unsigned int n = 0; n < atpos.size(); n ++) {
 		grad[species].push_back(std::vector<double>());
-		for (int m = 0; m < mixSpecies.size(); m++) {
+		for (unsigned int m = 0; m < mixSpecies.size(); m++) {
 			double gradcomponent = 0.0;
 			auto sp = mixSpecies[m];
 				
@@ -119,7 +119,7 @@ double SpeciesInfo::accumMixGradient(int species, std::vector<diagMatrix>& F, st
 	
 			callPref(::updateLocal)(gInfo.S, gInfo.GGT,
 				Vlocps->dataPref(), rhoIon->dataPref(), 0, 0, 0,
-				1, atposManaged.dataPref()+n, invVol, sp->VlocRadial,
+				1, atposManaged.dataPref()+n, 0, invVol, sp->VlocRadial,
 				sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
 			
 			Vlocps += (*e->coulomb)(rhoIon, Coulomb::PointChargeRight);
@@ -154,7 +154,8 @@ size_t SpeciesInfo::rhoAtom_nMatrices() const
 	}
 
 void SpeciesInfo::rhoAtom_initZero(matrix* rhoAtomPtr) const
-{	rhoAtom_COMMONinit
+{	assert(!isMixed);
+	rhoAtom_COMMONinit
 	UparamLOOP
 	(	for(int s=0; s<nSpins; s++)
 			for(unsigned a=0; a<atpos.size(); a++)
@@ -163,7 +164,8 @@ void SpeciesInfo::rhoAtom_initZero(matrix* rhoAtomPtr) const
 }
 
 void SpeciesInfo::rhoAtom_calc(const std::vector<diagMatrix>& F, const std::vector<ColumnBundle>& C, matrix* rhoAtomPtr) const
-{	static StopWatch watch("rhoAtom_calc"); watch.start();
+{	assert(!isMixed);
+	static StopWatch watch("rhoAtom_calc"); watch.start();
 	rhoAtom_COMMONinit
 	UparamLOOP
 	(	int matSize = orbCount * atpos.size();
@@ -191,7 +193,8 @@ void SpeciesInfo::rhoAtom_calc(const std::vector<diagMatrix>& F, const std::vect
 }
 
 double SpeciesInfo::rhoAtom_computeU(const matrix* rhoAtomPtr, matrix* U_rhoAtomPtr) const
-{	rhoAtom_COMMONinit
+{	assert(!isMixed);
+	rhoAtom_COMMONinit
 	double Utot = 0.;
 	UparamLOOP
 	(	double Uprefac = 0.5 * Uparams.UminusJ * e->eInfo.spinWeight;
@@ -217,7 +220,8 @@ double SpeciesInfo::rhoAtom_computeU(const matrix* rhoAtomPtr, matrix* U_rhoAtom
 	}
 
 void SpeciesInfo::rhoAtom_grad(const ColumnBundle& Cq, const matrix* U_rhoAtomPtr, ColumnBundle& HCq) const
-{	static StopWatch watch("rhoAtom_grad"); watch.start();
+{	assert(!isMixed);
+	static StopWatch watch("rhoAtom_grad"); watch.start();
 	rhoAtom_COMMONinit
 	UparamLOOP
 	(	U_rho_PACK
@@ -234,7 +238,8 @@ static const int RRTindex[6][2] = {{0,0}, {1,1}, {2,2}, {1,2}, {2,0}, {0,1}};
 
 void SpeciesInfo::rhoAtom_forces(const std::vector<diagMatrix>& F, const std::vector<ColumnBundle>& C, const matrix* U_rhoAtomPtr,
 	std::vector<vector3<> >& forces, matrix3<>* EU_RRT) const
-{	rhoAtom_COMMONinit
+{	assert(!isMixed);
+	rhoAtom_COMMONinit
 	UparamLOOP
 	(	U_rho_PACK
 		for(int q=e->eInfo.qStart; q<e->eInfo.qStop; q++)
@@ -269,7 +274,8 @@ void SpeciesInfo::rhoAtom_forces(const std::vector<diagMatrix>& F, const std::ve
 }
 
 void SpeciesInfo::rhoAtom_getV(const ColumnBundle& Cq, const matrix* U_rhoAtomPtr, ColumnBundle& Opsi, matrix& M, const vector3<>* derivDir, const int stressDir) const
-{	rhoAtom_COMMONinit
+{	assert(!isMixed);
+	rhoAtom_COMMONinit
 	int matSizeTot = 0; UparamLOOP( matSizeTot += orbCount * atpos.size(); )
 	if(!matSizeTot) return;
 	Opsi = Cq.similar(matSizeTot);
@@ -290,56 +296,43 @@ void SpeciesInfo::rhoAtom_getV(const ColumnBundle& Cq, const matrix* U_rhoAtomPt
 void SpeciesInfo::updateLocal(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
 	ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const
 {	if(!atpos.size()) return; //unused species
-	if(isMixed) return;
+	
 	((SpeciesInfo*)this)->updateLatticeDependent(); //update lattice dependent quantities (if lattice vectors have changed)
 	const GridInfo& gInfo = e->gInfo;
 
-	//Prepare optional outputs:
-	complex *nChargeballData=0, *nCoreData=0, *tauCoreData=0;
-	if(Z_chargeball) { nullToZero(nChargeball, gInfo); nChargeballData = nChargeball->dataPref(); }
-	if(nCoreRadial) { nullToZero(nCore, gInfo); nCoreData = nCore->dataPref(); }
-	if(tauCoreRadial) { nullToZero(tauCore, gInfo); tauCoreData = tauCore->dataPref(); }
-	
-	//Calculate in half G-space:
-	double invVol = 1.0/gInfo.detR;
-	callPref(::updateLocal)(gInfo.S, gInfo.GGT,
-		Vlocps->dataPref(), rhoIon->dataPref(), nChargeballData, nCoreData, tauCoreData,
-		atpos.size(), atposManaged.dataPref(), invVol, VlocRadial,
-		Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
-}
-
-
-void SpeciesInfo::updateLocalMixed(ScalarFieldTilde& Vlocps, ScalarFieldTilde& rhoIon, ScalarFieldTilde& nChargeball,
-	ScalarFieldTilde& nCore, ScalarFieldTilde& tauCore) const
-{	if(!atpos.size()) return; //unused species
-	if (!isMixed) return;
-
-	//((SpeciesInfo*)this)->updateLatticeDependent(); //update lattice dependent quantities (if lattice vectors have changed)
-	const GridInfo& gInfo = e->gInfo;
-
-	//Prepare optional outputs:
-	complex *nChargeballData=0, *nCoreData=0, *tauCoreData=0;
-	if(Z_chargeball) { nullToZero(nChargeball, gInfo); nChargeballData = nChargeball->dataPref(); die("Error");}
-	if(nCoreRadial) { nullToZero(nCore, gInfo); nCoreData = nCore->dataPref(); die("Error"); }
-	if(tauCoreRadial) { nullToZero(tauCore, gInfo); tauCoreData = tauCore->dataPref();  die("Error");}
-
-
-		for (int species = 0; species < mixSpecies.size(); species++) {
-
-			for (int n = 0; n < atpos.size(); n ++) {
-				auto sp = mixSpecies[species];
-
-				//Calculate in half G-space:
-				double invVol = 1.0/gInfo.detR*mixRatio[n][species];
-				callPref(::updateLocal)(gInfo.S, gInfo.GGT,
-					Vlocps->dataPref(), rhoIon->dataPref(), nChargeballData, nCoreData, tauCoreData,
-					1, atposManaged.dataPref()+n, invVol, sp->VlocRadial,
-					sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
-			}
+	if (!isMixed) {
+		//Prepare optional outputs:
+		complex *nChargeballData=0, *nCoreData=0, *tauCoreData=0;
+		if(Z_chargeball) { nullToZero(nChargeball, gInfo); nChargeballData = nChargeball->dataPref(); }
+		if(nCoreRadial) { nullToZero(nCore, gInfo); nCoreData = nCore->dataPref(); }
+		if(tauCoreRadial) { nullToZero(tauCore, gInfo); tauCoreData = tauCore->dataPref(); }
+		
+		//Calculate in half G-space:
+		double invVol = 1.0/gInfo.detR;
+		callPref(::updateLocal)(gInfo.S, gInfo.GGT,
+			Vlocps->dataPref(), rhoIon->dataPref(), nChargeballData, nCoreData, tauCoreData,
+			atpos.size(), atposManaged.dataPref(), 0, invVol, VlocRadial,
+			Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
+	} else {
+		for (unsigned int species = 0; species < mixSpecies.size(); species++) {
+			auto sp = mixSpecies[species];
+			
+			//Prepare optional outputs:
+			complex *nChargeballData=0, *nCoreData=0, *tauCoreData=0;
+			if(sp->Z_chargeball) { nullToZero(nChargeball, gInfo); nChargeballData = nChargeball->dataPref(); }
+			if(sp->nCoreRadial) { nullToZero(nCore, gInfo); nCoreData = nCore->dataPref(); }
+			if(sp->tauCoreRadial) { nullToZero(tauCore, gInfo); tauCoreData = tauCore->dataPref(); }
+		
+			//Calculate in half G-space:
+			double invVol = 1.0/gInfo.detR;
+			callPref(::updateLocal)(gInfo.S, gInfo.GGT,
+				Vlocps->dataPref(), rhoIon->dataPref(), nChargeballData, nCoreData, tauCoreData,
+				atpos.size(), atposManaged.dataPref(), &(mixRatio[species][0]), invVol, sp->VlocRadial,
+				sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
 		}
-
 	}
-
+}
+	
 
 std::vector< vector3<double> > SpeciesInfo::getLocalForces(const ScalarFieldTilde& ccgrad_Vlocps,
 	const ScalarFieldTilde& ccgrad_rhoIon, const ScalarFieldTilde& ccgrad_nChargeball,
@@ -348,29 +341,58 @@ std::vector< vector3<double> > SpeciesInfo::getLocalForces(const ScalarFieldTild
 	if(!atpos.size()) return std::vector< vector3<double> >(); //unused species, return empty forces
 	
 	const GridInfo& gInfo = e->gInfo;
-	complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
-	complex* ccgrad_nChargeballData = (Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
-	complex* ccgrad_nCoreData = nCoreRadial ? ccgrad_nCore->dataPref() : 0;
-	complex* ccgrad_tauCoreData = (tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
-	
-	//Propagate ccgrad* to gradient w.r.t structure factor:
-	ScalarFieldTilde ccgrad_SG(ScalarFieldTildeData::alloc(gInfo, isGpuEnabled())); //complex conjugate gradient w.r.t structure factor
-	callPref(gradLocalToSG)(gInfo.S, gInfo.GGT,
-		ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
-		ccgrad_nCoreData, ccgrad_tauCoreData, ccgrad_SG->dataPref(), VlocRadial,
-		Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
-	
-	//Now propagate that gradient to each atom of this species:
-	VectorFieldTilde gradAtpos; nullToZero(gradAtpos, gInfo);
-	vector3<complex*> gradAtposData; for(int k=0; k<3; k++) gradAtposData[k] = gradAtpos[k]->dataPref();
 	std::vector< vector3<> > forces(atpos.size());
-	for(unsigned at=0; at<atpos.size(); at++)
-	{	callPref(gradSGtoAtpos)(gInfo.S, atpos[at], ccgrad_SG->dataPref(), gradAtposData);
-		for(int k=0; k<3; k++)
-			forces[at][k] = -sum(gradAtpos[k]); //negative gradient
+	
+	if (!isMixed) {
+		complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
+		complex* ccgrad_nChargeballData = (Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
+		complex* ccgrad_nCoreData = nCoreRadial ? ccgrad_nCore->dataPref() : 0;
+		complex* ccgrad_tauCoreData = (tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
+		
+		//Propagate ccgrad* to gradient w.r.t structure factor:
+		ScalarFieldTilde ccgrad_SG(ScalarFieldTildeData::alloc(gInfo, isGpuEnabled())); //complex conjugate gradient w.r.t structure factor
+		callPref(gradLocalToSG)(gInfo.S, gInfo.GGT,
+			ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
+			ccgrad_nCoreData, ccgrad_tauCoreData, ccgrad_SG->dataPref(), VlocRadial,
+			Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
+		
+		//Now propagate that gradient to each atom of this species:
+		VectorFieldTilde gradAtpos; nullToZero(gradAtpos, gInfo);
+		vector3<complex*> gradAtposData; for(int k=0; k<3; k++) gradAtposData[k] = gradAtpos[k]->dataPref();
+		for(unsigned at=0; at<atpos.size(); at++)
+		{	callPref(gradSGtoAtpos)(gInfo.S, atpos[at], ccgrad_SG->dataPref(), gradAtposData);
+			for(int k=0; k<3; k++)
+				forces[at][k] = -sum(gradAtpos[k]); //negative gradient
+		}
+	} else {
+		for (unsigned int m = 0; m < mixSpecies.size(); m++) {
+			auto sp = mixSpecies[m];
+			complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
+			complex* ccgrad_nChargeballData = (sp->Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
+			complex* ccgrad_nCoreData = sp->nCoreRadial ? ccgrad_nCore->dataPref() : 0;
+			complex* ccgrad_tauCoreData = (sp->tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
+			
+			//Propagate ccgrad* to gradient w.r.t structure factor:
+			ScalarFieldTilde ccgrad_SG(ScalarFieldTildeData::alloc(gInfo, isGpuEnabled())); //complex conjugate gradient w.r.t structure factor
+			
+			callPref(gradLocalToSG)(gInfo.S, gInfo.GGT,
+				ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
+				ccgrad_nCoreData, ccgrad_tauCoreData, ccgrad_SG->dataPref(), sp->VlocRadial,
+				sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
+		
+			//Now propagate that gradient to each atom of this species:
+			VectorFieldTilde gradAtpos; nullToZero(gradAtpos, gInfo);
+			vector3<complex*> gradAtposData; for(int k=0; k<3; k++) gradAtposData[k] = gradAtpos[k]->dataPref();
+			for(unsigned at=0; at<atpos.size(); at++)
+			{	callPref(gradSGtoAtpos)(gInfo.S, atpos[at], ccgrad_SG->dataPref(), gradAtposData);
+				for(int k=0; k<3; k++)
+					forces[at][k] += -mixRatio[m][at]*sum(gradAtpos[k]); //negative gradient
+			}
+		}
 	}
 	return forces;
 }
+
 
 matrix3<> SpeciesInfo::getLocalStress(const ScalarFieldTilde& ccgrad_Vlocps,
 	const ScalarFieldTilde& ccgrad_rhoIon, const ScalarFieldTilde& ccgrad_nChargeball,
@@ -379,24 +401,95 @@ matrix3<> SpeciesInfo::getLocalStress(const ScalarFieldTilde& ccgrad_Vlocps,
 	if(!atpos.size()) return matrix3<>(); //unused species, no stress
 	
 	const GridInfo& gInfo = e->gInfo;
-	complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
-	complex* ccgrad_nChargeballData = (Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
-	complex* ccgrad_nCoreData = nCoreRadial ? ccgrad_nCore->dataPref() : 0;
-	complex* ccgrad_tauCoreData = (tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
 	
-	//Propagate ccgrad* to lattice derivative:
-	ManagedArray<symmetricMatrix3<>> result; result.init(gInfo.nG, isGpuEnabled());
-	callPref(gradLocalToStress)(gInfo.S, gInfo.GGT,
-		ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
-		ccgrad_nCoreData, ccgrad_tauCoreData, result.dataPref(), atpos.size(), atposManaged.dataPref(),
-		VlocRadial, Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
-	matrix3<> resultSum = callPref(eblas_sum)(gInfo.nG, result.dataPref());
-	return gInfo.GT * resultSum * gInfo.G;
+	if (!isMixed) {
+		complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
+		complex* ccgrad_nChargeballData = (Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
+		complex* ccgrad_nCoreData = nCoreRadial ? ccgrad_nCore->dataPref() : 0;
+		complex* ccgrad_tauCoreData = (tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
+		
+		//Propagate ccgrad* to lattice derivative:
+		ManagedArray<symmetricMatrix3<>> result; result.init(gInfo.nG, isGpuEnabled());
+		callPref(gradLocalToStress)(gInfo.S, gInfo.GGT,
+			ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
+			ccgrad_nCoreData, ccgrad_tauCoreData, result.dataPref(), atpos.size(), atposManaged.dataPref(), 0,
+			VlocRadial, Z, nCoreRadial, tauCoreRadial, Z_chargeball, std::pow(width_chargeball,2));
+		matrix3<> resultSum = callPref(eblas_sum)(gInfo.nG, result.dataPref());
+		return gInfo.GT * resultSum * gInfo.G;
+	} else {
+		
+		matrix3<> Eloc_RRT = matrix3<>();
+		for (unsigned int m = 0; m < mixSpecies.size(); m++) {
+			auto sp = mixSpecies[m];
+			
+			const GridInfo& gInfo = e->gInfo;
+			complex* ccgrad_rhoIonData = ccgrad_rhoIon ? ccgrad_rhoIon->dataPref() : 0;
+			complex* ccgrad_nChargeballData = (sp->Z_chargeball && ccgrad_nChargeball) ? ccgrad_nChargeball->dataPref() : 0;
+			complex* ccgrad_nCoreData = sp->nCoreRadial ? ccgrad_nCore->dataPref() : 0;
+			complex* ccgrad_tauCoreData = (sp->tauCoreRadial && ccgrad_tauCore) ? ccgrad_tauCore->dataPref() : 0;
+			
+			//Propagate ccgrad* to lattice derivative:
+			ManagedArray<symmetricMatrix3<>> result; result.init(gInfo.nG, isGpuEnabled());
+			callPref(gradLocalToStress)(gInfo.S, gInfo.GGT,
+				ccgrad_Vlocps->dataPref(), ccgrad_rhoIonData, ccgrad_nChargeballData,
+				ccgrad_nCoreData, ccgrad_tauCoreData, result.dataPref(), atpos.size(), atposManaged.dataPref(), &(mixRatio[m][0]),
+				sp->VlocRadial, sp->Z, sp->nCoreRadial, sp->tauCoreRadial, sp->Z_chargeball, std::pow(sp->width_chargeball,2));
+			matrix3<> resultSum = callPref(eblas_sum)(gInfo.nG, result.dataPref());
+			Eloc_RRT += gInfo.GT * resultSum * gInfo.G;
+		}
+		
+		return Eloc_RRT;
+	}
+}
+
+
+void SpeciesInfo::accumNonlocalForcesMixed(const ColumnBundle& Cq, const diagMatrix& Fq, std::vector<vector3<>>& forces, matrix3<>* Enl_RRT) const
+{
+	if (!isMixed) return;
+	
+	for (unsigned int m = 0; m < mixSpecies.size(); m++) {
+		auto sp = mixSpecies[m];
+		//Loop over atoms:
+		for(unsigned atom=0; atom<atpos.size(); atom++)
+		{	
+			auto V = getVmixed(Cq, m, atom);
+			matrix atomVdagC = (*V)^Cq;
+			
+			matrix E_atomVdagC = (sp->MnlAll * atomVdagC) * Fq;
+			
+			if(QintAll) die("Error: Ultrasoft pseudopotentials"); //Contribution via overlap augmentation
+			
+			vector3<> fCart; //proportional to cartesian force
+			for(int k=0; k<3; k++)
+			{	matrix atomDVdagC = D(*V, k)^Cq;
+				fCart[k] = trace(E_atomVdagC * dagger(atomDVdagC)).real();
+			}
+			forces[atom] += mixRatio[m][atom]* 2.*Cq.qnum->weight * (e->gInfo.RT * fCart);
+			
+			if(Enl_RRT)
+			{	
+				matrix VdagC_RRT[6];
+				for(int ij=0; ij<6; ij++) //loop over stress components
+				{	int iDir = RRTindex[ij][0];
+					int jDir = RRTindex[ij][1];
+					
+					int stressDir = 3*iDir+jDir; //combined index for stress projector functions
+					VdagC_RRT[ij] = (*getVmixed(Cq, m, atom, 0, stressDir)) ^ Cq; //TODO
+					
+					double Enl_RRT_ij = 2.*Cq.qnum->weight * mixRatio[m][atom] * trace(E_atomVdagC * dagger(VdagC_RRT[ij])).real();
+					(*Enl_RRT)(iDir,jDir) += Enl_RRT_ij;
+					if(iDir != jDir)
+						(*Enl_RRT)(jDir,iDir) += Enl_RRT_ij;
+				}
+			}
+		}
+	}
 }
 
 void SpeciesInfo::accumNonlocalForces(const ColumnBundle& Cq, const matrix& VdagC, const matrix& E_VdagC, const matrix& grad_CdagOCq,
 	std::vector<vector3<>>& forces, matrix3<>* Enl_RRT) const
 {
+	if (isMixed) return;
 	//Cartesian gradient of VdagC:
 	matrix DVdagC[3]; 
 	{	auto V = getV(Cq);
@@ -447,7 +540,8 @@ std::shared_ptr<ColumnBundle> SpeciesInfo::getV(const ColumnBundle& Cq, const ve
 	std::pair<vector3<>,const Basis*> cacheKey = std::make_pair(qnum.k, &basis);
 	int nProj = MnlAll.nRows() / e->eInfo.spinorLength();
 	if(!nProj || !atpos.size()) return 0; //purely local psp
-	//TODO
+	assert(!isMixed);
+	
 	//First check cache
 	if(e->cntrl.cacheProjectors && (!derivDir) && (!stressDir))
 	{	auto iter = cachedV.find(cacheKey);
@@ -473,14 +567,15 @@ std::shared_ptr<ColumnBundle> SpeciesInfo::getV(const ColumnBundle& Cq, const ve
 }
 
 
-std::shared_ptr<ColumnBundle> SpeciesInfo::getVmixed(const ColumnBundle& Cq, int species, int atom) const
+std::shared_ptr<ColumnBundle> SpeciesInfo::getVmixed(const ColumnBundle& Cq, int species, int atom, const vector3<>* derivDir, const int stressDir) const
 {	const QuantumNumber& qnum = *(Cq.qnum);
 	const Basis& basis = *(Cq.basis);
 	std::tuple<vector3<>,const Basis*,int,int> cacheKey = std::make_tuple(qnum.k, &basis, species, atom);
-	if(!isMixed) return 0; //purely local psp
+	if(!atpos.size()) return 0;
+	assert(isMixed);
 	
 	//First check cache
-	if(e->cntrl.cacheProjectors)
+	if(e->cntrl.cacheProjectors && (!derivDir) && (!stressDir))
 	{	auto iter = cachedVmixed.find(cacheKey);
 		if(iter != cachedVmixed.end()) //found
 			return iter->second; //return cached value
@@ -498,11 +593,11 @@ std::shared_ptr<ColumnBundle> SpeciesInfo::getVmixed(const ColumnBundle& Cq, int
 			{	size_t offs = iProj * basis.nbasis;
 				size_t atomStride = nProj * basis.nbasis;
 				callPref(Vnl)(basis.nbasis, atomStride, 1, l, m, qnum.k, basis.iGarr.dataPref(),
-				basis.gInfo->G, atposManaged.dataPref()+atom, mixSpecies[species]->VnlRadial[l][p], V->dataPref()+offs);
+				basis.gInfo->G, atposManaged.dataPref()+atom, mixSpecies[species]->VnlRadial[l][p], V->dataPref()+offs, derivDir, stressDir);
 				iProj++;
 			}
 	//Add to cache if necessary:
-	if(e->cntrl.cacheProjectors)
+	if(e->cntrl.cacheProjectors && (!derivDir) && (!stressDir))
 		((SpeciesInfo*)this)->cachedVmixed[cacheKey] = V;
 	return V;
 }

@@ -539,7 +539,7 @@ ScalarFieldTilde PCM::getFullCore() const
 			for(unsigned iSp=0; iSp<atpos.size(); iSp++)
 			{	ManagedArray<vector3<>> atposManaged(atpos[iSp]);
 				//Compute structure factor and accumulate contribution from this species:
-				callPref(getSG)(gInfo.S, atposManaged.nData(), atposManaged.dataPref(), 1./gInfo.detR, SG->dataPref());
+				callPref(getSG)(gInfo.S, atposManaged.nData(), atposManaged.dataPref(), 0, 1./gInfo.detR, SG->dataPref());
 				nFullCore += e.iInfo.species[iSp]->ZfullCore * SG;
 			}
 			return nFullCore;
