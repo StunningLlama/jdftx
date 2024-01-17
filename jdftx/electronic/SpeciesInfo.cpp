@@ -402,8 +402,7 @@ void SpeciesInfo::updateLatticeDependent()
 
 	//Change radial function extents if R has changed:
 	if(Rchanged)
-	{	assert(!isMixed);
-		int nGridLoc = int(ceil(gInfo.GmaxGrid/gInfo.dGradial))+5;
+	{	int nGridLoc = int(ceil(gInfo.GmaxGrid/gInfo.dGradial))+5;
 		VlocRadial.updateGmax(0, nGridLoc);
 		nCoreRadial.updateGmax(0, nGridLoc);
 		tauCoreRadial.updateGmax(0, nGridLoc);
@@ -414,8 +413,7 @@ void SpeciesInfo::updateLatticeDependent()
 	
 	//Update Qradial indices, matrix and nagIndex if not previously init'd, or if R has changed:
 	if(Qint.size() && (Rchanged || !QradialMat))
-	{	assert(!isMixed);
-		int nCoeffHlf = (Qradial.cbegin()->second.nCoeff+1)/2; //pack real radial functions into complex numbers
+	{	int nCoeffHlf = (Qradial.cbegin()->second.nCoeff+1)/2; //pack real radial functions into complex numbers
 		int nCoeff = 2*nCoeffHlf;
 		//Qradial:
 		QradialMat = zeroes(nCoeffHlf, Qradial.size());

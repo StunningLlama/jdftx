@@ -156,8 +156,9 @@ void SpeciesInfo::accumulateAtomicPotential(ScalarFieldTilde& dTilde) const
 //Set atomic orbitals in column bundle from radial functions (almost same operation as setting Vnl)
 void SpeciesInfo::setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset, const vector3<>* derivDir, const int stressDir, const std::vector<vector3<> >* mixatpos, const vector3<>* mixatposdatapref) const
 {	if(!atpos.size() && !mixatpos) return;
-	if (isMixed)
+	if (isMixed) {
 		return mixSpecies[mixOrbitalSpecies]->setAtomicOrbitals(Y, applyO, colOffset, derivDir, stressDir, &atpos, atposManaged.dataPref());
+	}
 	//assert(!isMixed);
 	const auto& fRadial = applyO ? OpsiRadial : psiRadial; //!< select radial function set (psi or Opsi)
 	int nSpinCopies = 2/e->eInfo.qWeightSum;
@@ -167,13 +168,13 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& Y, bool applyO, int colOffset,
 	int iCol = colOffset;
 	for(int l=0; l<int(fRadial.size()); l++)
 		for(int n=0; n<nAtomicOrbitals(l); n++)
-		{	setAtomicOrbitals(Y, applyO, n, l, iCol, nOrbitalsPerAtom, derivDir, stressDir);
+		{	setAtomicOrbitals(Y, applyO, n, l, iCol, nOrbitalsPerAtom, derivDir, stressDir, mixatpos, mixatposdatapref);
 			iCol += (2*l+1)*nSpinCopies;
 		}
 }
 void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, int l, int colOffset, int atomColStride, const vector3<>* derivDir, const int stressDir, const std::vector<vector3<> >* mixatpos, const vector3<>* mixatposdatapref) const
 {	if(!atpos.size() && !mixatpos) return;
-	int atoms = mixatpos? mixatpos->size() : atpos.size();
+	unsigned int atoms = mixatpos? mixatpos->size() : atpos.size();
 	assert(!isMixed);
 	assert(l < int(psiRadial.size()));
 	assert(int(n) < nAtomicOrbitals(l));
@@ -234,24 +235,52 @@ void SpeciesInfo::setAtomicOrbitals(ColumnBundle& psi, bool applyO, unsigned n, 
 		}
 	}
 }
+
+void SpeciesInfo::countMixedOrbitals()
+{
+	int max = 0;
+	for (unsigned int m = 0; m < mixSpecies.size(); m++)
+	{
+		assert(!isRelativistic());
+		auto sp = mixSpecies[m];
+		
+		int totalOrbitals = 0;
+		int nOrbitals = 0;
+		for(int l=0; l<int(sp->psiRadial.size()); l++)
+			nOrbitals += (2*l+1)*sp->psiRadial[l].size();
+		int nSpinCopies = 2/e->eInfo.qWeightSum;
+		totalOrbitals = nOrbitals * atpos.size() * nSpinCopies;
+		
+		if (totalOrbitals > max) {
+			max = totalOrbitals;
+			mixOrbitalSpecies = m;
+			mixOrbitalNum = max;
+			logPrintf("HII %d", max);
+		}
+	}
+}
+
 int SpeciesInfo::nAtomicOrbitals() const
 {	
-	if (isMixed)
-		return mixSpecies[mixOrbitalSpecies]->nAtomicOrbitals();
+	if (isMixed) {
+		return mixOrbitalNum;
+	} else {
+		
+		int nOrbitals = 0;
+		if(isRelativistic())
+		{	for(int l=0; l<int(psiRadial.size()); l++)
+				for(unsigned n=0; n<psiRadial[l].size(); n++)
+					nOrbitals += (psi2j[l][n]+1);
+			return nOrbitals * atpos.size();
+		}
+		else
+		{	for(int l=0; l<int(psiRadial.size()); l++)
+				nOrbitals += (2*l+1)*psiRadial[l].size();
+			int nSpinCopies = 2/e->eInfo.qWeightSum;
+			return nOrbitals * atpos.size() * nSpinCopies;
+		}
+	}
 	
-	int nOrbitals = 0;
-	if(isRelativistic())
-	{	for(int l=0; l<int(psiRadial.size()); l++)
-			for(unsigned n=0; n<psiRadial[l].size(); n++)
-				nOrbitals += (psi2j[l][n]+1);
-		return nOrbitals * atpos.size();
-	}
-	else
-	{	for(int l=0; l<int(psiRadial.size()); l++)
-			nOrbitals += (2*l+1)*psiRadial[l].size();
-		int nSpinCopies = 2/e->eInfo.qWeightSum;
-		return nOrbitals * atpos.size() * nSpinCopies;
-	}
 }
 int SpeciesInfo::lMaxAtomicOrbitals() const
 {	assert(!isMixed);

@@ -49,6 +49,7 @@ public:
 	bool isMixed; //!< Is this a mixed atom
 	std::vector<std::shared_ptr<SpeciesInfo>> mixSpecies;
 	int mixOrbitalSpecies;
+	int mixOrbitalNum;
 	
 	std::vector<vector3<> > atpos; //!< array of atomic positions of this species
 	std::vector<vector3<> > velocities; //!< array of atomic velocities (NAN unless running MD) in lattice coordinates
@@ -146,6 +147,7 @@ public:
 	void setAtomicOrbitals(ColumnBundle& Y, bool applyO, unsigned n, int l, int colOffset=0, int atomColStride=0,
 		const vector3<>* derivDir=0, const int stressDir=-1, const std::vector<vector3<> >* mixatpos = 0, const vector3<>* mixatposdatapref = 0) const;  //!< Same as above, but for specific n and l.
 		//!< If non-zero, atomColStride overrides the number of columns between the same orbital of multiple atoms (default = number of orbitals at current n and l)
+	void countMixedOrbitals();
 	int nAtomicOrbitals() const; //!< return number of atomic orbitals in this species (all atoms)
 	int lMaxAtomicOrbitals() const; //!< return maximum angular momentum in available atomic orbitals
 	int nAtomicOrbitals(int l) const; //!< return number of (pseudo-)principal quantum numbers for atomic orbitals of given l

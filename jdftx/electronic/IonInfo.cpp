@@ -89,16 +89,9 @@ void IonInfo::setup(const Everything &everything)
 				if (spc->isUltrasoft())
 					die("Mixed atoms cannot contain ultrasoft potentials.");
 			}
-			
-			
-			int max = 0;
-			for (unsigned int m = 0; m < sp->mixSpecies.size(); m++) {
-				auto subsp = sp->mixSpecies[m];
-				if (subsp->nAtomicOrbitals() > max)
-				{
-					sp->mixOrbitalSpecies = m;
-					max = subsp->nAtomicOrbitals();
-				}
+			if (isGpuEnabled())
+			{
+				die("GPU support for mixed atoms not enabled yet");
 			}
 		}
 	}

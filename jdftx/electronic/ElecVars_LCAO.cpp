@@ -153,8 +153,8 @@ int ElecVars::LCAO()
 	
 	if (iInfo.hasMixedAtoms)
 	{
-		logPrintf("(LCAO disabled for mixed atom calculation)  ");
-		return 0;
+		//logPrintf("(LCAO disabled for mixed atom calculation)  ");
+		//return 0;
 	}
 	
 	//Count total atomic orbitals:
@@ -199,6 +199,7 @@ int ElecVars::LCAO()
 		std::vector<matrix> HVdagCq(iInfo.species.size());
 		iInfo.EnlAndGrad(eInfo.qnums[q], eye(lcao.nBands), VdagC[q], HVdagCq); //non-local pseudopotentials
 		iInfo.projectGrad(HVdagCq, C[q], HniCq);
+		iInfo.EnlAndGradMixed(eInfo.qnums[q], eye(lcao.nBands), C[q], HniCq);
 		lcao.HniSub[q] = C[q]^HniCq;
 		lcao.rotPrev[q] = eye(lcao.nBands);
 		F[q].resize(lcao.nBands, 0.);

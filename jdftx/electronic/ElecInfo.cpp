@@ -100,6 +100,13 @@ void ElecInfo::setup(const Everything &everything, std::vector<diagMatrix>& F, E
 	if (e->iInfo.hasMixedAtoms && fillingsUpdate != FillingsHsub)
 		die("Please enable smearing for mixed atom calculations.\n");
 	
+	
+	for(auto sp: e->iInfo.species)
+	{	if (sp->isMixed)
+			sp->countMixedOrbitals();
+	}
+	
+	
 	//--- Calculate nBands if elec-n-bands not given:
 	if(!nBands)
 	{	double nsElectronsMax = *std::max_element(nsElectrons.begin(), nsElectrons.end());
