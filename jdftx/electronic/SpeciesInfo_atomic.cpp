@@ -255,7 +255,6 @@ void SpeciesInfo::countMixedOrbitals()
 			max = totalOrbitals;
 			mixOrbitalSpecies = m;
 			mixOrbitalNum = max;
-			logPrintf("HII %d", max);
 		}
 	}
 }

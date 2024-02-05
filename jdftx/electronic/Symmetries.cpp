@@ -424,7 +424,10 @@ std::vector<SpaceGroupOp> Symmetries::findSpaceGroup(const std::vector< matrix3<
 					if(((!M) || magMomEquivalent(M1rot, (*M)[a2])) //magnetization matches
 						and sp->constraints[a1].isEquivalent(sp->constraints[a2], rotCart) //and constraints match
 					)
-					{	vector3<> dpos = Diag(sup) * (sp->atpos[a2] - pos1rot); //note in unit cell coordinates (matters if this is a phonon supercell)
+					{
+						if (sp->isMixed && a1 != a2) continue;
+
+						vector3<> dpos = Diag(sup) * (sp->atpos[a2] - pos1rot); //note in unit cell coordinates (matters if this is a phonon supercell)
 						for(int k=0; k<3; k++) dpos[k] -= floor(0.5+dpos[k]); //wrap offset to base cell
 						if(plook.find(dpos) == string::npos) //keep offsets unique modulo unit cell (rather than supercell in the phonon case)
 						{	plook.addPoint(aCur.size(), dpos);
