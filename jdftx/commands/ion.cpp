@@ -165,8 +165,8 @@ struct CommandIon : public Command
 						pos = e.gInfo.R * pos; //report cartesian positions
 					logPrintf("%s", sp->name.c_str());
 					if (sp->isMixed)
-						for (unsigned int m = 0; m < sp->mixRatio[at].size(); m++)
-							logPrintf("%19.15lf ", sp->mixRatio[at][m]);
+						for (unsigned int m = 0; m < sp->mixSpecies.size(); m++)
+							logPrintf("%19.15lf ", sp->mixRatio[m][at]);
 						
 					logPrintf("%19.15lf %19.15lf %19.15lf", pos[0], pos[1], pos[2]);
 					//Optional velocity:

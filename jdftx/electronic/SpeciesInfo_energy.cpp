@@ -112,6 +112,8 @@ double SpeciesInfo::accumMixGradient(int species, std::vector<diagMatrix>& F, st
 				matrix MatomVdagC = sp->MnlAll * VdagCq;
 				gradcomponent += Cq.qnum->weight*trace(Fq * dagger(VdagCq) * MatomVdagC).real();
 			}
+
+			mpiWorld->allReduce(gradcomponent, MPIUtil::ReduceSum);
 			
 			double invVol = 1.0/gInfo.detR;
 			initZero(Vlocps, gInfo);
