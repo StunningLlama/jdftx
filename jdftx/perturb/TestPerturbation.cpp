@@ -329,15 +329,15 @@ bool TestPerturbation::FDTest_dgradpsi() {
 
 	setState(C1);
 	v.init(e);
-	v.X = dY;
+	v.C = dY;
 	ps.hessian(dGrad_anal, v);
 	double delta = 0;
 
 	for(int q=eInfo.qStart; q<eInfo.qStop; q++) {
 		dGrad_num[q] = Grad2[q]-Grad1[q];
-		delta += nrm2(dGrad_anal.X[q] - dGrad_num[q])/nrm2(dGrad_anal.X[q]);
+		delta += nrm2(dGrad_anal.C[q] - dGrad_num[q])/nrm2(dGrad_anal.C[q]);
 		pInfo.sampleCB(dGrad_num[q], "dGrad_num");
-		pInfo.sampleCB(dGrad_anal.X[q], "dGrad_anal");
+		pInfo.sampleCB(dGrad_anal.C[q], "dGrad_anal");
 	}
 
 
@@ -586,9 +586,9 @@ bool TestPerturbation::FDTest_dgradtau() {
 
 	double delta = 0;
 	for(int q=eInfo.qStart; q<eInfo.qStop; q++) {
-		delta += nrm2((Grad2[q]-Grad1[q])-pInfo.dGradTau.X[q])/nrm2(pInfo.dGradTau.X[q]);
+		delta += nrm2((Grad2[q]-Grad1[q])-pInfo.dGradTau.C[q])/nrm2(pInfo.dGradTau.C[q]);
 		pInfo.sampleCB(Grad2[q]-Grad1[q], "dGrad_num");
-		pInfo.sampleCB(pInfo.dGradTau.X[q], "dGrad_anal");
+		pInfo.sampleCB(pInfo.dGradTau.C[q], "dGrad_anal");
 	}
 
 	mpiWorld->allReduce(delta, MPIUtil::ReduceSum);
@@ -615,9 +615,9 @@ bool TestPerturbation::FDTest_dgradtauatom() {
 
 	double delta = 0;
 	for(int q=eInfo.qStart; q<eInfo.qStop; q++) {
-		delta += nrm2((Grad2[q]-Grad1[q])-pInfo.dGradTau.X[q])/nrm2(pInfo.dGradTau.X[q]);
+		delta += nrm2((Grad2[q]-Grad1[q])-pInfo.dGradTau.C[q])/nrm2(pInfo.dGradTau.C[q]);
 		pInfo.sampleCB(Grad2[q]-Grad1[q], "dGrad_num");
-		pInfo.sampleCB(pInfo.dGradTau.X[q], "dGrad_anal");
+		pInfo.sampleCB(pInfo.dGradTau.C[q], "dGrad_anal");
 	}
 
 	mpiWorld->allReduce(delta, MPIUtil::ReduceSum);

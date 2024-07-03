@@ -26,7 +26,8 @@ along with JDFTx.  If not, see <http://www.gnu.org/licenses/>.
 #include <perturb/LinearSolver.h>
 
 struct PerturbationGradient {
-	std::vector<ColumnBundle> X; //!< First order change in unnormalized wfns
+	std::vector<ColumnBundle> C; //!< First order change in unnormalized wfns
+	std::vector<matrix> eta; //TODO
 	const ElecInfo* eInfo;
 	const class PerturbationInfo* pInfo;
 
@@ -58,7 +59,19 @@ public:
 	void computeIncommensurateWfns(); //!< Automatically set up and minimize incommensurate wfns, not implemented yet
 
 	
+	void getdF(diagMatrix& dFq, const diagMatrix& Haux_eigs_q, const diagMatrix& dHaux_eigs_q, const double dMu); //TODO
+
+	double getdMu(const std::vector<diagMatrix>& dHaux_eigs); //TODO
+
+	void getdEvecs(const diagMatrix& eps, const matrix& dH, matrix& dW, diagMatrix& dEps); //TODO
+
+	double getdMuDerivContrib(const std::vector<matrix>& dHsub, const std::vector<diagMatrix>* dHaux_eigs = 0);
+
+	void getdGradF(const diagMatrix& Haux_eigs, const matrix& dHsub, matrix& dgradEta, double dMuDerivContrib, const diagMatrix* dHaux_eigs = 0);
+
 	void getdn(ScalarFieldArray& dn, const std::vector<ColumnBundle>* dC, const std::vector<ColumnBundle>* C = 0); //!< Derivative of density w.r.t. wavefunctions
+
+	void getdndF(ScalarFieldArray& dn, const std::vector<diagMatrix>& dF, const std::vector<ColumnBundle>* C = 0); //TODO
 
 	void getdnInc(const std::vector<ColumnBundle>* dC, const std::vector<ColumnBundle>* C, complexScalarFieldArray& dnpq, complexScalarFieldArray& dnmq); //!< Derivative of density w.r.t. wavefunctions, incommensurate case
 	

@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 	logPrintf("\n----------- Band structure minimization -------------\n"); logFlush();
 	bandMinimize(e); // Do the band-structure minimization
 	logPrintf("\nConverged band energies:\n");
-	e.eVars.Hsub_eigs[0].print(globalLog, "BandEig: %13.9lf\n");
+	e.eVars.Hsub_eigs[q][0].print(globalLog, "BandEig: %13.9lf\n");
 	
 	//Cleanup:
 	finalizeSystem();

@@ -118,7 +118,7 @@ public:
 	diagMatrix smearEntropy(double mu, const diagMatrix& eps) const; //!< element-wise smearing function entropy
 	
 	//! Propagate matrix gradient w.r.t F to gradient w.r.t. eps (in the basis where fillings are diagonal)
-	matrix smearGrad(double mu, const diagMatrix& eps, const matrix& gradF) const;
+	matrix smearGrad(double mu, const diagMatrix& eps, const matrix& gradF, bool inv = false, bool sqrtOp = false) const;
 
 	//! Compute number of electrons for the smearing function with specified eigenvalues
 	//! If magnetization is constrained, bisect on corresponding Lagrange multiplier Bz, and retrieve it too

@@ -73,7 +73,7 @@ struct CommandPerturbMinimize : public Command
 			{	case VPTp_nIterations: pl.get(p.nIterations, 0, "nIterations", true); break;
 				case VPTp_algorithm: pl.get(p.algorithm, SolverParams::MINRES, algMap, "algorithm", true); break;
 				case VPTp_residualTol: pl.get(p.residualTol, 1e-4, "residualTol", true); break;
-				case VPTp_residualDiffThreshold: pl.get(p.residualDiffThreshold, 1e-4, "residualDiffThreshold", true); break;
+				case VPTp_residualDiffThreshold: pl.get(p.residualDiffThreshold, 1e-2, "residualDiffThreshold", true); break;
 				case VPTp_CGBypass: pl.get(p.CGBypass, false, boolMap, "CGBypass", true); break;
 				case VPTp_recomputeResidual: pl.get(p.recomputeResidual, false, boolMap, "recomputeResidual", true); break;
 				case VPTp_Delim: return; //end of input

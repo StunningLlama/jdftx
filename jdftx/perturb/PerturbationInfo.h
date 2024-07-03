@@ -100,11 +100,13 @@ public:
 	
 	void sampleCB (ColumnBundle C, std::string name);
 	void sampleMat (matrix C, std::string name);
+	void samplediagMat (diagMatrix C, std::string name);
 	void sampleField (ScalarField V, std::string name);
 	void sampleField (ScalarFieldTilde V, std::string name);
 
 	bool commensurate = true; //!< Is the perturbation lattice periodic
 	bool testing = false; //!< Whether or not a FD test is being conducted
+	bool diagonalizePerturbation = true; //TODO
 	SolverParams solverParams; //!< solver parameters
 
 	std::shared_ptr<VextPerturbation> dVext;
@@ -125,7 +127,8 @@ public:
 	/* Gradients and wavefunction shifts */
 	PerturbationGradient dGradTau, dGradPsi;
 	std::vector<ColumnBundle> dC, Cinc;
-	std::vector<matrix> dU, dUmhalfatom, dHsub, dHsubatom, CdagdHC, CdagdHCatom;
+	std::vector<diagMatrix> dHaux_eigs, dF;
+	std::vector<matrix> dU, dUmhalfTau, dHsub, dHsubTau, CdagdHC, CdagdHCtau, dW;
 	
 	/* Intermediate scalar field derivs */
 	ScalarFieldArray dn;
@@ -138,6 +141,7 @@ public:
 	std::vector<ColumnBundle> grad, HC, OC;
 	ScalarField sigma_cached, e_nn_cached, e_sigma_cached, e_nsigma_cached, e_sigmasigma_cached; //LDA and GGA second derivs
 	VectorField IDJn_cached;
+	double mu_cached;
 	
 	std::vector<matrix> E_nAug_cached, E_nAug_dVsclocpsi, E_nAug_dVscloctau;
 };

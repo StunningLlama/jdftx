@@ -92,11 +92,17 @@ void PerturbationInfo::setup(const Everything &e, const ElecVars &eVars)
 		init(grad, eInfo.nStates, eInfo.nBands, &e.basis[0], &eInfo);
 		
 		dU.resize(eInfo.nStates);
-		dUmhalfatom.resize(eInfo.nStates);
+		dUmhalfTau.resize(eInfo.nStates);
 		dHsub.resize(eInfo.nStates);
-		dHsubatom.resize(eInfo.nStates);
+		dHsubTau.resize(eInfo.nStates);
 		CdagdHC.resize(eInfo.nStates);
-		CdagdHCatom.resize(eInfo.nStates);
+		CdagdHCtau.resize(eInfo.nStates);
+
+		if (eInfo.fillingsUpdate == ElecInfo::FillingsHsub) {
+			dF.resize(eInfo.nStates);
+			dHaux_eigs.resize(eInfo.nStates);
+			dW.resize(eInfo.nStates);
+		}
 		
 		dVscloc.resize(eVars.Vscloc.size());
 		dVsclocTau.resize(eVars.Vscloc.size());
@@ -315,8 +321,8 @@ void PerturbationInfo::initInc(std::vector<ColumnBundle>& Y, int nbundles, int n
 
 void PerturbationInfo::checkSupportedFeatures(const Everything &e, const ElecInfo &eInfo)
 {
-	if(!(eInfo.fillingsUpdate==ElecInfo::FillingsConst && eInfo.scalarFillings))
-		die("Constant fillings only.\n");
+	if(eInfo.fillingsUpdate==ElecInfo::FillingsConst && !eInfo.scalarFillings)
+		die("Please message Brandon to fix this [TODO].\n");
 	if(e.exCorr.exxFactor())
 		die("Variational perturbation currently does not support exact exchange.\n");
 	if(e.eInfo.hasU)
@@ -387,6 +393,11 @@ void PerturbationInfo::sampleCB (ColumnBundle C, std::string name) {
 void PerturbationInfo::sampleMat (matrix C, std::string name) {
 	if (C.nRows() < 3 || C.nCols() < 3) return;
 	logPrintf("Matrix %s values %g %g %g %g %g %g %g %g %g\n", name.c_str(), C(0,0).x, C(0,1).x, C(0,2).x, C(1,0).x,C(1,1).x,C(1,2).x,C(2,0).x,C(2,1).x,C(2,2).x);
+}
+
+void PerturbationInfo::samplediagMat (diagMatrix C, std::string name) {
+	if (C.nRows() < 3 || C.nCols() < 3) return;
+	logPrintf("Matrix %s values %g %g %g %g %g %g %g %g\n", name.c_str(), C[0], C[1], C[2], C[3], C[4], C[5], C[6], C[7]);
 }
 
 void PerturbationInfo::sampleField (ScalarField V, std::string name) {

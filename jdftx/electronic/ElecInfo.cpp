@@ -336,15 +336,23 @@ diagMatrix ElecInfo::smearEntropy(double mu, const diagMatrix& eps) const
 }
 
 
-matrix ElecInfo::smearGrad(double mu, const diagMatrix& eps, const matrix& gradF) const
+matrix ElecInfo::smearGrad(double mu, const diagMatrix& eps, const matrix& gradF, bool inv, bool sqrtOp) const
 {	matrix gradEps(gradF); //copy input
 	complex* gradEpsData = gradEps.data();
 	//calculate result in place:
 	for(int i=0; i<gradF.nRows(); i++)
 		for(int j=0; j<gradF.nCols(); j++)
 		{	double deps = eps[i] - eps[j];
-			gradEpsData[gradEps.index(i,j)]
-				*= (fabs(deps)<1e-6) ? smearPrime(mu,eps[i]) : (smear(mu,eps[i])-smear(mu,eps[j]))/deps;
+			double factor = (fabs(deps)<1e-6) ? smearPrime(mu,eps[i]) : (smear(mu,eps[i])-smear(mu,eps[j]))/deps;
+
+			if (inv) factor = 1.0/factor;
+			if (sqrtOp) factor = std::signbit(factor)*sqrt(std::fabs(factor));
+			if (!std::isfinite(factor) || std::fabs(factor) > 1e30) {
+				factor = 0;
+				logPrintf("Infinity");
+			}
+
+			gradEpsData[gradEps.index(i,j)] *= factor;
 		}
 	return gradEps;
 }

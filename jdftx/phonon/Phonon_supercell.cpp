@@ -155,7 +155,7 @@ void Phonon::processPerturbation(const Perturbation& pert, string fnamePattern)
 				ostringstream fname;
 				if (nSpins > 1) fname << s;
 				fname << ".dHsub";
-				matrix dHsub = eSup->pertInfo.dHsub[0]+eSup->pertInfo.dHsubatom[0];
+				matrix dHsub = eSup->pertInfo.dHsub[0]+eSup->pertInfo.dHsubTau[0];
 				dHsub.write(eSup->dump.getFilename(fname.str()).c_str());
 			}
 		}
@@ -202,7 +202,7 @@ void Phonon::processPerturbation(const Perturbation& pert, string fnamePattern)
 			{	for (int s = 0; s < nSpins; s++)
 				{	int qSup = s*(eSup->eInfo.nStates/nSpins);
 					assert(eSup->eInfo.qnums[qSup].k.length_squared() == 0);
-					dHsub_pert[s] = eSup->pertInfo.CdagdHC[qSup]+eSup->pertInfo.dHsubatom[qSup];
+					dHsub_pert[s] = eSup->pertInfo.CdagdHC[qSup]+eSup->pertInfo.dHsubTau[qSup];
 					//dHsub_pert[s] = eSup->pertInfo.dHsub[qSup]+eSup->pertInfo.dHsubatom[qSup];
 				}
 			}

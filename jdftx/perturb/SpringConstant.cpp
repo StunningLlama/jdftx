@@ -28,11 +28,12 @@ SpringConstant::SpringConstant(Everything& e) : e(e), eVars(e.eVars), eInfo(e.eI
 
 double SpringConstant::computeMatrixElement(std::shared_ptr<AtomPerturbation> modeA, std::shared_ptr<AtomPerturbation> modeB)
 {
+	//TODO disallow fillings hsub
 	assert(pInfo.commensurate);
 	pInfo.datom = modeB;
 	ps.updateNonlocalDerivs();
 	ps.calcdGradTau();	
-	return dot(pInfo.dGradTau.X, pInfo.dC, &pInfo, &eInfo) + dsqEpair(modeA, modeB) + dsqEnl(modeA, modeB) + dsqEloc(modeA, modeB);
+	return dot(pInfo.dGradTau.C, pInfo.dC, &pInfo, &eInfo) + dsqEpair(modeA, modeB) + dsqEnl(modeA, modeB) + dsqEloc(modeA, modeB);
 }
 
 double SpringConstant::dsqEpair(std::shared_ptr<AtomPerturbation> modeA, std::shared_ptr<AtomPerturbation> modeB)
